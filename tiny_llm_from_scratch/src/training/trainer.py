@@ -36,20 +36,33 @@ class TrainingConfig:
 
 
 class CosineWarmupScheduler:
-    def __init__(self, optimizer: torch.optim.Optimizer, warmup_steps: int, max_steps: int, max_lr: float, min_lr: float):
+    def __init__(
+        self,
+        optimizer: torch.optim.Optimizer,
+        warmup_steps: int,
+        max_steps: int,
+        max_lr: float,
+        min_lr: float,
+        start_step: int = 0,
+    ):
         self.optimizer = optimizer
         self.warmup_steps = warmup_steps
         self.max_steps = max_steps
         self.max_lr = max_lr
         self.min_lr = min_lr
+        self.start_step = start_step
 
     def step(self, current_step: int) -> float:
-        if current_step < self.warmup_steps:
-            lr = self.max_lr * (current_step + 1) / max(1, self.warmup_steps)
+        eff_step = max(0, current_step - self.start_step)
+        total_steps = max(1, self.max_steps - self.start_step)
+        warmup = min(self.warmup_steps, max(1, total_steps // 4))
+
+        if eff_step < warmup:
+            lr = self.min_lr + (self.max_lr - self.min_lr) * (eff_step + 1) / max(1, warmup)
         elif current_step >= self.max_steps:
             lr = self.min_lr
         else:
-            decay_ratio = (current_step - self.warmup_steps) / (self.max_steps - self.warmup_steps)
+            decay_ratio = (eff_step - warmup) / max(1, total_steps - warmup)
             coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio))
             lr = self.min_lr + coeff * (self.max_lr - self.min_lr)
 
@@ -127,6 +140,12 @@ class Trainer:
         self.monitor = TrainingMonitor(self.log_path)
         self.global_step = 0
         self.best_val_loss = float("inf")
+
+    def set_resume_state(self, step: int, best_val_loss: float):
+        self.global_step = step
+        self.best_val_loss = best_val_loss
+        self.monitor.best_val_loss = best_val_loss
+        self.scheduler.start_step = step
 
     def print_preflight(self):
         cfg = self.model.config

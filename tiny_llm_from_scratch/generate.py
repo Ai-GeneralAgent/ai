@@ -134,6 +134,11 @@ def main():
     required_keys = ("config", "model_state_dict", "stoi")
 
     if not all(key in ckpt for key in required_keys):
+        if "arch_version" in ckpt or ("config" in ckpt and "stoi" not in ckpt):
+            raise ValueError(
+                f"Checkpoint '{ckpt_path.name}' is a Modern/BPE checkpoint without character 'stoi'. "
+                "Please use 'generate_bpe.py' or 'chat.py' to generate with this model."
+            )
         raise ValueError(
             "Checkpoint is missing one of: config, model_state_dict, or stoi."
         )

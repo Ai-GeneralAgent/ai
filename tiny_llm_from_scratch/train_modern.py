@@ -102,16 +102,20 @@ def main():
         model = ModernTransformer(cfg)
 
     eval_int = args.eval_interval if args.eval_interval != 25 else (200 if args.steps >= 2000 else 25)
+    total_steps = args.steps if initial_step == 0 else (args.steps if args.steps > initial_step else (initial_step + args.steps))
+    step_delta = total_steps - initial_step
+    warmup = min(500, max(10, step_delta // 10))
+
     t_cfg = TrainingConfig(
-        max_steps=args.steps,
+        max_steps=total_steps,
         learning_rate=args.lr,
         min_learning_rate=args.lr * 0.1,
-        warmup_steps=min(500, max(10, args.steps // 10)),
+        warmup_steps=warmup,
         batch_size=args.batch_size,
         grad_accum_steps=args.grad_accum,
         eval_interval=eval_int,
         eval_batches=10,
-        save_interval=min(500, args.steps),
+        save_interval=min(500, max(25, step_delta)),
         output_dir=str(PROJECT_ROOT / "checkpoints"),
         run_name=args.run_name,
         device=device,
@@ -119,9 +123,7 @@ def main():
 
     trainer = Trainer(model, t_cfg, cache, tok_path)
     if initial_step > 0:
-        trainer.global_step = initial_step
-        trainer.best_val_loss = best_val_loss
-        trainer.monitor.best_val_loss = best_val_loss
+        trainer.set_resume_state(initial_step, best_val_loss)
 
     monitor = trainer.train()
 

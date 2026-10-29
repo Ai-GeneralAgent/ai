@@ -61,8 +61,9 @@ def discover_best_checkpoint(project_root: Path, requested: Optional[str] = None
             return p
 
     candidates = [
-        project_root / "checkpoints" / "modern_base_v2_best.pt",
+        project_root / "checkpoints" / "modern_chat_finetuned.pt",
         project_root / "checkpoints" / "modern_production_v2_best.pt",
+        project_root / "checkpoints" / "modern_base_v2_best.pt",
         project_root / "checkpoints" / "modern_knowledge_v2_best.pt",
         project_root / "checkpoints" / "modern_tiny_transformer_best.pt",
         project_root / "checkpoints" / "tiny_bpe_expanded_continued_v2.pt",
