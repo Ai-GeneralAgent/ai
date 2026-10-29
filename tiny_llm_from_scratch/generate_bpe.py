@@ -1,5 +1,11 @@
-﻿import argparse
+import argparse
 from pathlib import Path
+import sys
+
+# Ensure UTF-8 stdout on Windows
+if sys.platform == "win32":
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
 import torch
 from tokenizers import Tokenizer
@@ -12,7 +18,8 @@ def main():
     )
     parser.add_argument(
         "--checkpoint",
-        default="checkpoints/tiny_bpe_gpt.pt",
+        default="checkpoints",
+        help="Path to a checkpoint file or directory containing checkpoints",
     )
     parser.add_argument("--tokenizer", default=None)
     parser.add_argument("--prompt", default="Artificial intelligence")
@@ -40,35 +47,75 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     path = Path(args.checkpoint)
 
+    # If user passed a directory, resolve to the best checkpoint inside it
+    if path.is_dir():
+        candidates = [
+            path / "modern_base_v2_best.pt",
+            path / "modern_production_v2_best.pt",
+            path / "modern_knowledge_v2_best.pt",
+            path / "modern_tiny_transformer_best.pt",
+            path / "tiny_bpe_expanded_continued_v2.pt",
+            path / "tiny_bpe_expanded.pt",
+            path / "tiny_bpe_gpt.pt",
+        ]
+        resolved = None
+        for c in candidates:
+            if c.is_file():
+                resolved = c
+                break
+        if not resolved:
+            pt_files = sorted(path.glob("*.pt"), key=lambda f: f.stat().st_mtime, reverse=True)
+            if pt_files:
+                resolved = pt_files[0]
+            else:
+                raise FileNotFoundError(f"No .pt checkpoints found inside directory: {path.resolve()}")
+        path = resolved
+
     if not path.is_file():
-        raise FileNotFoundError(
-            f"Checkpoint not found: {path.resolve()}"
-        )
+        # Check in checkpoints/ subfolder if not found
+        fallback = Path("checkpoints") / path
+        if fallback.is_file():
+            path = fallback
+        else:
+            raise FileNotFoundError(f"Checkpoint not found: {path.resolve()}")
 
-    checkpoint = torch.load(
-        path, map_location=device, weights_only=False
-    )
+    print(f"Loading checkpoint: {path.name}")
+    checkpoint = torch.load(path, map_location=device, weights_only=False)
 
-    tokenizer_path = args.tokenizer or checkpoint.get(
-        "tokenizer_path", "tokenizer_bpe.json"
-    )
+    tokenizer_path = args.tokenizer or checkpoint.get("tokenizer_path", "tokenizer_bpe.json")
     if not Path(tokenizer_path).is_file():
-        raise FileNotFoundError(
-            f"Tokenizer not found: {Path(tokenizer_path).resolve()}"
-        )
+        tokenizer_path = Path(__file__).resolve().parent / "tokenizer_bpe.json"
+    if not Path(tokenizer_path).is_file():
+        raise FileNotFoundError(f"Tokenizer not found: {Path(tokenizer_path).resolve()}")
 
-    tokenizer = Tokenizer.from_file(tokenizer_path)
+    tokenizer = Tokenizer.from_file(str(tokenizer_path))
 
-    model = TinyBPEGPT(
-        vocab_size=checkpoint["vocab_size"],
-        block_size=checkpoint["block_size"],
-        n_embd=checkpoint["n_embd"],
-        n_head=checkpoint["n_head"],
-        n_layer=checkpoint["n_layer"],
-        dropout=checkpoint.get("dropout", 0.1),
-    ).to(device)
+    # Detect modern v2 vs legacy v1 BPE checkpoint
+    if isinstance(checkpoint, dict) and (
+        "arch_version" in checkpoint or ("config" in checkpoint and isinstance(checkpoint["config"], dict) and "arch_version" in checkpoint["config"])
+    ):
+        from src.models.config import ModelConfig
+        from src.models.transformer import ModernTransformer
 
-    model.load_state_dict(checkpoint["model_state_dict"])
+        cfg_dict = checkpoint["config"]
+        config = ModelConfig.from_dict(cfg_dict)
+        model = ModernTransformer(config).to(device)
+        model.load_state_dict(checkpoint["model_state_dict"])
+        block_size = config.block_size
+        print(f"Loaded Modern Transformer v2.0 (block_size: {block_size}, layers: {config.n_layer}, heads: {config.n_head})")
+    else:
+        model = TinyBPEGPT(
+            vocab_size=checkpoint.get("vocab_size", 8000),
+            block_size=checkpoint.get("block_size", 256),
+            n_embd=checkpoint.get("n_embd", 192),
+            n_head=checkpoint.get("n_head", 4),
+            n_layer=checkpoint.get("n_layer", 3),
+            dropout=checkpoint.get("dropout", 0.0),
+        ).to(device)
+        model.load_state_dict(checkpoint["model_state_dict"])
+        block_size = checkpoint.get("block_size", 256)
+        print(f"Loaded Legacy BPE Transformer v1 (block_size: {block_size})")
+
     model.eval()
 
     prompt_ids = tokenizer.encode(args.prompt).ids
@@ -77,7 +124,7 @@ def main():
 
     # Keep only the most recent context tokens if the prompt is too long.
     idx = torch.tensor(
-        [prompt_ids[-model.block_size:]],
+        [prompt_ids[-block_size:]],
         dtype=torch.long,
         device=device,
     )
@@ -85,7 +132,7 @@ def main():
 
     with torch.inference_mode():
         for _ in range(args.tokens):
-            context = idx[:, -model.block_size:]
+            context = idx[:, -block_size:]
             logits, _ = model(context)
             logits = logits[:, -1, :] / args.temperature
 
@@ -129,7 +176,7 @@ def main():
             generated.append(next_token.item())
 
     print("\n--- Generated text ---\n")
-    print(tokenizer.decode(prompt_ids))
+    print(tokenizer.decode(prompt_ids), end="")
     print(tokenizer.decode(generated))
     print("\n--- End ---")
 
