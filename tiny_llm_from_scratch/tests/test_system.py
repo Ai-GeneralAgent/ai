@@ -359,6 +359,45 @@ class TestModernLLMSystem(unittest.TestCase):
         self.assertEqual(prep_complex.intent, "complex-task")
         self.assertIn("1. Intent Analysis:", prep_complex.thinking)
 
+    # 29. Curriculum Study Engine (Grades 1 - 12)
+    def test_29_curriculum_study_engine(self):
+        from src.data.curriculum import CurriculumStudyEngine
+        sample_book = self.tmp_dir / "physics_sample.txt"
+        sample_book.write_text(
+            "Chapter 1: Mechanics. Gravity is defined as the force of attraction between masses. "
+            "Velocity refers to the rate of change of displacement with time. "
+            "Photosynthesis is known as the process used by plants to convert light energy into chemical energy.",
+            encoding="utf-8"
+        )
+        engine = CurriculumStudyEngine(self.tmp_dir / "curriculum_out")
+        res = engine.study_book(sample_book, grade_hint="grade_9")
+        self.assertEqual(res["grade_level"], "grade_9")
+        self.assertGreaterEqual(res["concepts_learned"], 2)
+        self.assertGreaterEqual(res["flashcards_generated"], 2)
+        self.assertTrue(Path(res["study_notes_path"]).is_file())
+
+    # 30. Safe Code Sandbox Execution
+    def test_30_safe_code_sandbox(self):
+        from src.tools.code_engine import SafeCodeSandbox
+        # Valid execution with stdout
+        code = "res = [x * 2 for x in range(5)]\nprint('Result:', res)"
+        out = SafeCodeSandbox.execute_snippet(code)
+        self.assertTrue(out["success"])
+        self.assertIn("Result: [0, 2, 4, 6, 8]", out["stdout"])
+
+        # Security restriction on hazardous import
+        bad_code = "import os\nos.listdir('.')"
+        bad_out = SafeCodeSandbox.execute_snippet(bad_code)
+        self.assertFalse(bad_out["success"])
+        self.assertIn("Security restriction", bad_out["error"])
+
+    # 31. Creative Analogy Engine
+    def test_31_creative_analogy_engine(self):
+        from src.generation.creative import CreativeEngine
+        analogy = CreativeEngine.get_intuitive_analogy("quantum mechanics")
+        self.assertIsNotNone(analogy)
+        self.assertIn("spinning coin", analogy)
+
 
 if __name__ == "__main__":
     unittest.main()

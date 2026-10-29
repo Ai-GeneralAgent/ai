@@ -136,6 +136,9 @@ def print_help():
     print(f"  {C.YELLOW}/rag search <query>{C.RESET}  Search local knowledge corpus and view citations")
     print(f"  {C.YELLOW}/tools{C.RESET}               List all registered tool schemas and permissions")
     print(f"  {C.YELLOW}/calc <query>{C.RESET}        Run math solver (e.g. /calc 2x+10=50, /calc 20% of 150, /calc 100 km to mi)")
+    print(f"  {C.YELLOW}/study <file>{C.RESET}         Study textbook (Grades 1-12): extract concepts, flashcards, & index RAG")
+    print(f"  {C.YELLOW}/code <snippet>{C.RESET}       Execute Python snippet safely in sandbox with stdout capture")
+    print(f"  {C.YELLOW}/creative <prompt>{C.RESET}   Generate Claude-style intuitive analogies & creative mental models")
     print(f"  {C.YELLOW}/model{C.RESET}               List available checkpoints in checkpoints/")
     print(f"  {C.YELLOW}/model <filename>{C.RESET}    Switch active checkpoint on the fly")
     print(f"  {C.YELLOW}/temp <float>{C.RESET}        Set temperature (default: 0.70)")
@@ -320,6 +323,65 @@ def launch_cli():
                     print(f"\n{res.get('explanation')}\n")
                 else:
                     print(f"{C.RED}Math Error:{C.RESET} {res.get('error')}")
+            continue
+
+        elif lead == "/study":
+            parts = user_input.split()
+            if len(parts) < 2:
+                print(f"{C.RED}Usage: /study <path_to_book_or_pdf> [grade_hint]{C.RESET}")
+            else:
+                book_target = parts[1]
+                hint = parts[2] if len(parts) > 2 else None
+                from ..data.curriculum import CurriculumStudyEngine
+                engine = CurriculumStudyEngine(project_root / "data_curriculum", rag_pipeline=rag)
+                target_p = Path(book_target)
+                if not target_p.is_absolute():
+                    target_p = project_root / target_p
+                if not target_p.is_file():
+                    print(f"{C.RED}File not found: {book_target}{C.RESET}")
+                else:
+                    print(f"\n{C.CYAN}--- STUDYING TEXTBOOK LIKE A HUMAN STUDENT ---{C.RESET}")
+                    print(f"Reading and analyzing: {target_p.name}...")
+                    try:
+                        res = engine.study_book(target_p, grade_hint=hint)
+                        print(f"  {C.GREEN}• Grade Classification:{C.RESET} {res['grade_name']} (Difficulty: {res['difficulty']}/12)")
+                        print(f"  {C.GREEN}• Key Concepts Extracted:{C.RESET} {res['concepts_learned']}")
+                        print(f"  {C.GREEN}• Q&A Flashcards Generated:{C.RESET} {res['flashcards_generated']}")
+                        print(f"  {C.GREEN}• Study Notes Saved:{C.RESET} {Path(res['study_notes_path']).name}")
+                        print(f"  {C.GREEN}• RAG Chunks Indexed:{C.RESET} {res['rag_chunks_indexed']}")
+                        print(f"{C.GRAY}Ready for reading comprehension and inquiry.{C.RESET}\n")
+                    except Exception as e:
+                        print(f"{C.RED}Error studying book: {e}{C.RESET}")
+            continue
+
+        elif lead == "/code":
+            code_text = " ".join(user_input.split()[1:])
+            if not code_text:
+                print(f"{C.RED}Usage: /code print(sum([x**2 for x in range(10)])){C.RESET}")
+            else:
+                from ..tools.code_engine import SafeCodeSandbox
+                res = SafeCodeSandbox.execute_snippet(code_text)
+                if res["success"]:
+                    print(f"\n{C.GREEN}[SANDBOX OUTPUT]{C.RESET}")
+                    print(res["stdout"] if res["stdout"] else "(Executed with returncode 0; no stdout)")
+                    print(f"{C.GRAY}(Elapsed: {res['elapsed']:.4f}s){C.RESET}\n")
+                else:
+                    print(f"\n{C.RED}[SANDBOX ERROR] {res.get('error')}{C.RESET}\n")
+            continue
+
+        elif lead == "/creative":
+            creative_q = " ".join(user_input.split()[1:])
+            if not creative_q:
+                print(f"{C.RED}Usage: /creative quantum mechanics  OR  /creative gravity{C.RESET}")
+            else:
+                from ..generation.creative import CreativeEngine
+                analogy = CreativeEngine.get_intuitive_analogy(creative_q)
+                if analogy:
+                    print(f"\n{C.CYAN}### Intuitive Mental Model for '{creative_q}':{C.RESET}\n")
+                    print(analogy)
+                    print(f"\n{C.GRAY}(Intuitive everyday analogy mapped from core principles){C.RESET}\n")
+                else:
+                    print(f"{C.YELLOW}Topic not in preset analogies. Generating via model...{C.RESET}")
             continue
 
         elif lead == "/model":

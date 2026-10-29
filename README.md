@@ -15,9 +15,19 @@ A clean, modular, production-grade Transformer language model and autonomous rea
   * **PyTorch SDPA Attention**: Scaled Dot-Product Attention with causal masking.
   * **Weight-Tied Embeddings**: Input token embeddings and output projection share weights for 2× faster convergence.
   * **LoRA Adapters**: Configurable low-rank adaptation ($Q, V, W_1, W_3$) for lightweight fine-tuning.
+* **Human-Like Curriculum Study Pipeline (Grades 1 to 12)**:
+  * Ingests educational textbooks and books across `data_curriculum/grade_1` through `grade_12`.
+  * Extracts key concepts, definitions, and formulas like a human student highlighting notes.
+  * Generates Q&A reading comprehension flashcards and study notes (`.md` and `.jsonl`).
+  * Seamlessly indexes notes into the RAG knowledge base for grounded question answering.
+* **Safe Python Code Sandbox & Execution**:
+  * In-process restricted sandbox with AST pre-parsing, timeout protection, and stdout capture.
+  * Allows the AI to write, self-test, and verify code execution directly in the console.
 * **Claude / ChatGPT-style Chain-of-Thought (CoT) Thinking**:
   * Visible `<thinking>` reasoning traces detailing goal decomposition, constraint checks, and execution roadmaps.
   * Toggleable via `/think on` or `/think off` in the interactive console.
+* **Creative Writing & Intuitive Mental Models**:
+  * Formulates grounded intuitive analogies for complex concepts (quantum mechanics, neural networks, gravity, etc.).
 * **Advanced Math & Complex Task Solver**:
   * **Algebraic Equations**: Solves linear equations ($ax + b = c$) and quadratic equations ($ax^2 + bx + c = 0$) with step-by-step mathematical derivations.
   * **Word Problems & Percentages**: Calculates percentages, markups, discounts, and compound arithmetic.

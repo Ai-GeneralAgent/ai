@@ -1,4 +1,10 @@
+"""
+Claude & ChatGPT-grade Reasoning Orchestrator (v2.2.0)
+Full multi-step Chain-of-Thought thinking, Curriculum Learning Ingestion,
+Safe Python Code Execution Sandbox, Advanced Math Solving, and Creative Synthesis.
+"""
 from dataclasses import dataclass, field
+from pathlib import Path
 import re
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -7,7 +13,9 @@ from .verifier import ResponseVerifier, VerificationResult
 from ..rag.pipeline import LocalRAGPipeline
 from ..tools.registry import ToolRegistry
 from ..tools.builtin import solve_math_problem
+from ..tools.code_engine import SafeCodeSandbox, CodingAssistant
 from ..tools.agent_loop import BoundedAgentLoop
+from ..generation.creative import CreativeEngine
 
 
 @dataclass
@@ -53,6 +61,13 @@ class ReasoningOrchestrator:
         """Deterministic intent classifier."""
         lower = prompt.lower().strip()
 
+        # Curriculum / Textbook study check
+        if any(k in lower for k in [
+            "study book", "study textbook", "curriculum", "grade 1", "grade 12",
+            "study note", "flashcard", "/study", "ncert", "cbse"
+        ]):
+            return "curriculum"
+
         # Complex task check (multi-step instructions, comparisons, itineraries)
         if any(k in lower for k in [
             "step by step", "first,", "and then", "compare and contrast",
@@ -67,10 +82,17 @@ class ReasoningOrchestrator:
         ]) or re.search(r"(\d+\s*[\+\-\*\/\^]\s*\d+)", lower) or re.search(r"x\s*[\+\-\*=]", lower):
             return "mathematical"
 
+        # Creative writing / Intuitive analogy check
+        if any(k in lower for k in [
+            "story", "poem", "poetry", "analogy", "metaphor", "creative",
+            "explain like i'm 5", "eli5", "imagine a world", "essay on"
+        ]):
+            return "creative"
+
         # Programming / code check
         if any(k in lower for k in [
             "def ", "class ", "python", "code", "bug", "syntax", "function",
-            "import ", "write a script", "algorithm", "javascript", "sql"
+            "import ", "write a script", "algorithm", "javascript", "sql", "execute code"
         ]):
             return "programming"
 
@@ -90,9 +112,9 @@ class ReasoningOrchestrator:
     def estimate_complexity(self, prompt: str, intent: str) -> str:
         """Determines if request requires direct response, short plan, or multi-step execution."""
         words = len(prompt.split())
-        if intent == "complex-task" or words > 30:
+        if intent in ["complex-task", "curriculum"] or words > 30:
             return "complex"
-        if intent in ["programming", "document-based"] or words > 15:
+        if intent in ["programming", "document-based", "creative"] or words > 15:
             return "moderate"
         return "simple"
 
@@ -101,8 +123,9 @@ class ReasoningOrchestrator:
         intent = self.classify_intent(user_prompt)
         complexity = self.estimate_complexity(user_prompt, intent)
 
-        thinking_steps = []
-        thinking_steps.append(f"1. Intent Analysis: Identified goal as [{intent}] with complexity [{complexity}].")
+        thinking_steps = [
+            f"1. Intent Analysis: Identified goal as [{intent}] with complexity [{complexity}].",
+        ]
 
         prep = ReasoningPreparation(intent=intent, complexity=complexity)
 
@@ -129,7 +152,38 @@ class ReasoningOrchestrator:
                 })
                 return prep
 
-        # 3. Tool Execution
+        # 3. Creative Analogies
+        if intent == "creative":
+            analogy = CreativeEngine.get_intuitive_analogy(user_prompt)
+            if analogy:
+                thinking_steps.append("2. Creative Synthesis: Formulating intuitive mental model analogy.")
+                prep.thinking = "\n".join(thinking_steps)
+                prep.direct_answer = f"### Intuitive Mental Model\n\n{analogy}\n\n*(Core concept mapped to intuitive everyday intuition)*"
+                return prep
+
+        # 4. Code Execution in Sandbox
+        if intent == "programming" and any(k in user_prompt.lower() for k in ["run", "execute", "test", "eval"]):
+            # Extract code block if provided
+            code_match = re.search(r"```(?:python)?\s*([\s\S]*?)```", user_prompt)
+            if code_match:
+                code_to_run = code_match.group(1).strip()
+                thinking_steps.append("2. Code Execution: Evaluating code snippet inside Safe Python Sandbox.")
+                sandbox_res = SafeCodeSandbox.execute_snippet(code_to_run)
+                prep.thinking = "\n".join(thinking_steps)
+                prep.direct_answer = CodingAssistant.format_solution(
+                    task="Sandboxed Code Evaluation",
+                    code=code_to_run,
+                    explanation="Code executed safely with stdout capture and restricted builtins.",
+                    sandbox_result=sandbox_res,
+                )
+                prep.verifications.append({
+                    "check": "Code Verification",
+                    "passed": sandbox_res["success"],
+                    "details": f"Execution completed in {sandbox_res.get('elapsed', 0):.4f}s",
+                })
+                return prep
+
+        # 5. Environment Tool Execution
         if intent == "tool-assisted" and self.tools:
             if "time" in user_prompt.lower() or "date" in user_prompt.lower():
                 res = self.tools.execute("datetime_now", {})
@@ -138,7 +192,7 @@ class ReasoningOrchestrator:
                 prep.direct_answer = f"The current date and time is: **{res.get('result')}**"
                 return prep
 
-        # 4. Preparation for generation
+        # 6. Preparation for generation
         thinking_steps.append("3. Synthesis: Structuring comprehensive, logical response.")
         prompt_with_context = user_prompt
         if retrieved_context:

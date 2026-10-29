@@ -470,3 +470,17 @@ def register_builtin_tools(registry: ToolRegistry, project_root: Path = Path("."
         parameters={"query": "search query"},
         execute_fn=lambda query: search_codebase(query, project_root),
     ))
+
+    registry.register(ToolDefinition(
+        name="python_sandbox",
+        description="Safely executes a Python code snippet and captures stdout output.",
+        parameters={"code": "valid python code string"},
+        execute_fn=lambda code: __import__("src.tools.code_engine", fromlist=["SafeCodeSandbox"]).SafeCodeSandbox.execute_snippet(code),
+    ))
+
+    registry.register(ToolDefinition(
+        name="study_curriculum_book",
+        description="Studies an educational textbook (Grades 1-12), extracts concepts, flashcards, and notes.",
+        parameters={"book_path": "path to book", "grade_hint": "optional grade level e.g. grade_5"},
+        execute_fn=lambda book_path, grade_hint=None: __import__("src.data.curriculum", fromlist=["CurriculumStudyEngine"]).CurriculumStudyEngine(project_root / "data_curriculum").study_book(Path(book_path), grade_hint=grade_hint),
+    ))
