@@ -1,9 +1,15 @@
+"""
+Built-in Safe Tools Framework
+Includes Advanced Math Solver (algebra, arithmetic, percentages, unit conversions, statistics),
+Path-guarded File Reader, Codebase Search, and System DateTime.
+"""
 import ast
 from datetime import datetime
 import math
 import operator
 from pathlib import Path
-from typing import Any, Dict, List, Union
+import re
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from .registry import ToolDefinition, ToolRegistry
 
@@ -23,26 +29,53 @@ class SafeCalculator:
         ast.UAdd: operator.pos,
     }
 
+    CONSTANTS = {
+        "pi": math.pi,
+        "e": math.e,
+        "tau": math.tau,
+    }
+
     FUNCTIONS = {
         "sqrt": math.sqrt,
+        "cbrt": lambda x: math.pow(x, 1 / 3) if x >= 0 else -math.pow(-x, 1 / 3),
         "sin": math.sin,
         "cos": math.cos,
         "tan": math.tan,
+        "asin": math.asin,
+        "acos": math.acos,
+        "atan": math.atan,
         "log": math.log,
+        "log2": math.log2,
+        "log10": math.log10,
         "exp": math.exp,
+        "factorial": math.factorial,
+        "gcd": math.gcd,
+        "lcm": getattr(math, "lcm", lambda a, b: abs(a * b) // math.gcd(a, b)),
+        "comb": getattr(math, "comb", lambda n, k: math.factorial(n) // (math.factorial(k) * math.factorial(n - k))),
+        "perm": getattr(math, "perm", lambda n, k: math.factorial(n) // math.factorial(n - k)),
         "abs": abs,
         "round": round,
+        "floor": math.floor,
+        "ceil": math.ceil,
+        "min": min,
+        "max": max,
+        "sum": sum,
     }
 
     @classmethod
     def evaluate(cls, expression: str) -> Union[int, float]:
-        node = ast.parse(expression.strip(), mode="eval").body
+        clean_expr = expression.strip().replace("^", "**")
+        node = ast.parse(clean_expr, mode="eval").body
         return cls._eval_node(node)
 
     @classmethod
     def _eval_node(cls, node):
         if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
             return node.value
+        elif isinstance(node, ast.Name):
+            if node.id in cls.CONSTANTS:
+                return cls.CONSTANTS[node.id]
+            raise ValueError(f"Unknown variable or constant: {node.id}")
         elif isinstance(node, ast.BinOp):
             op_type = type(node.op)
             if op_type not in cls.OPERATORS:
@@ -62,16 +95,291 @@ class SafeCalculator:
                 raise ValueError(f"Unsupported function: {func_name}")
             args = [cls._eval_node(arg) for arg in node.args]
             return cls.FUNCTIONS[func_name](*args)
+        elif isinstance(node, ast.List):
+            return [cls._eval_node(elt) for elt in node.elts]
         raise ValueError(f"Unsupported expression construct: {type(node).__name__}")
 
 
+class AdvancedMathSolver:
+    """Solves algebraic equations, percentages, statistics, unit conversions, and word problems."""
+
+    UNIT_CONVERSIONS = {
+        # Length (base: meter)
+        ("km", "miles"): lambda v: v * 0.621371,
+        ("miles", "km"): lambda v: v / 0.621371,
+        ("m", "feet"): lambda v: v * 3.28084,
+        ("feet", "m"): lambda v: v / 3.28084,
+        ("cm", "inches"): lambda v: v / 2.54,
+        ("inches", "cm"): lambda v: v * 2.54,
+        # Temperature
+        ("c", "f"): lambda v: (v * 9 / 5) + 32,
+        ("f", "c"): lambda v: (v - 32) * 5 / 9,
+        ("c", "k"): lambda v: v + 273.15,
+        ("k", "c"): lambda v: v - 273.15,
+        # Weight (base: kg)
+        ("kg", "lbs"): lambda v: v * 2.20462,
+        ("lbs", "kg"): lambda v: v / 2.20462,
+        ("g", "oz"): lambda v: v * 0.035274,
+        ("oz", "g"): lambda v: v / 0.035274,
+        # Speed
+        ("km/h", "mph"): lambda v: v * 0.621371,
+        ("mph", "km/h"): lambda v: v / 0.621371,
+        ("m/s", "km/h"): lambda v: v * 3.6,
+        ("km/h", "m/s"): lambda v: v / 3.6,
+        # Digital
+        ("gb", "mb"): lambda v: v * 1024,
+        ("mb", "gb"): lambda v: v / 1024,
+        ("tb", "gb"): lambda v: v * 1024,
+        ("gb", "tb"): lambda v: v / 1024,
+    }
+
+    @classmethod
+    def solve_linear_equation(cls, eq: str) -> Optional[Dict[str, Any]]:
+        """Solves linear equations like ax + b = c or ax = c."""
+        # Normalize
+        eq = eq.replace(" ", "")
+        if "=" not in eq:
+            return None
+
+        # Pattern: (a)?x (+/- b)? = c
+        match = re.match(r"^([+-]?\d*(?:\.\d+)?)?\*?x([+-]\d+(?:\.\d+)?)?=([+-]?\d+(?:\.\d+)?)$", eq)
+        if not match:
+            return None
+
+        a_str, b_str, c_str = match.groups()
+        if a_str in ["", "+", None]:
+            a = 1.0
+        elif a_str == "-":
+            a = -1.0
+        else:
+            a = float(a_str)
+
+        b = float(b_str) if b_str else 0.0
+        c = float(c_str)
+
+        if a == 0:
+            return None
+
+        # ax + b = c => ax = c - b => x = (c - b) / a
+        rhs = c - b
+        x = rhs / a
+        steps = [
+            f"Original equation: {a}x + ({b}) = {c}",
+            f"Subtract {b} from both sides: {a}x = {rhs}",
+            f"Divide by {a}: x = {x}",
+        ]
+        return {"type": "linear_equation", "variable": "x", "result": x, "steps": steps}
+
+    @classmethod
+    def solve_quadratic_equation(cls, eq: str) -> Optional[Dict[str, Any]]:
+        """Solves quadratic equations like ax^2 + bx + c = 0."""
+        clean = eq.replace(" ", "").replace("**2", "^2")
+        clean = re.sub(r"x2(?![0-9])", "x^2", clean)
+        match = re.match(r"^([+-]?\d*(?:\.\d+)?)?\*?x\^2([+-]\d*(?:\.\d+)?\*?x)?([+-]\d+(?:\.\d+)?)?=0$", clean)
+        if not match:
+            return None
+
+        a_str, b_str, c_str = match.groups()
+        if a_str in ["", "+", None]:
+            a = 1.0
+        elif a_str == "-":
+            a = -1.0
+        else:
+            a = float(a_str)
+
+        if not b_str:
+            b = 0.0
+        else:
+            b_val = b_str.replace("x", "").replace("*", "")
+            b = 1.0 if b_val in ["+", ""] else (-1.0 if b_val == "-" else float(b_val))
+
+        c = float(c_str) if c_str else 0.0
+
+        discriminant = (b ** 2) - (4 * a * c)
+        if discriminant > 0:
+            x1 = (-b + math.sqrt(discriminant)) / (2 * a)
+            x2 = (-b - math.sqrt(discriminant)) / (2 * a)
+            roots = [round(x1, 4), round(x2, 4)]
+        elif discriminant == 0:
+            x1 = -b / (2 * a)
+            roots = [round(x1, 4)]
+        else:
+            real = -b / (2 * a)
+            imag = math.sqrt(-discriminant) / (2 * a)
+            roots = [f"{real:.3f} + {imag:.3f}i", f"{real:.3f} - {imag:.3f}i"]
+
+        steps = [
+            f"Quadratic coefficients: a = {a}, b = {b}, c = {c}",
+            f"Discriminant Delta = b^2 - 4ac = ({b})^2 - 4({a})({c}) = {discriminant}",
+            f"Roots: {roots}",
+        ]
+        return {"type": "quadratic_equation", "result": roots, "steps": steps}
+
+    @classmethod
+    def solve_percentage(cls, query: str) -> Optional[Dict[str, Any]]:
+        """Handles percentage queries like '20% of 150' or 'increase 100 by 15%'."""
+        lower = query.lower()
+        # Pattern: X% of Y
+        m1 = re.search(r"(\d+(?:\.\d+)?)\s*%\s*of\s*(\d+(?:\.\d+)?)", lower)
+        if m1:
+            pct, total = float(m1.group(1)), float(m1.group(2))
+            val = (pct / 100.0) * total
+            return {
+                "type": "percentage",
+                "result": val,
+                "steps": [f"Calculate {pct}% of {total}: ({pct} / 100) * {total} = {val}"],
+            }
+
+        # Pattern: increase/decrease X by Y%
+        m2 = re.search(r"(increase|decrease|discount|off)\s*(?:by\s*)?(\d+(?:\.\d+)?)\s*%\s*(?:on|from)?\s*(\d+(?:\.\d+)?)", lower)
+        if m2:
+            action, pct, base = m2.group(1), float(m2.group(2)), float(m2.group(3))
+            delta = (pct / 100.0) * base
+            val = (base + delta) if action == "increase" else (base - delta)
+            return {
+                "type": "percentage_delta",
+                "result": val,
+                "steps": [
+                    f"Base: {base}, Percentage: {pct}%",
+                    f"Change amount: ({pct} / 100) * {base} = {delta}",
+                    f"Final result: {base} {'+' if action == 'increase' else '-'} {delta} = {val}",
+                ],
+            }
+        return None
+
+    @classmethod
+    def convert_units(cls, query: str) -> Optional[Dict[str, Any]]:
+        """Handles unit conversions like 'convert 100 km to miles' or '50 c to f'."""
+        pattern = r"(?:convert\s+)?(\d+(?:\.\d+)?)\s*([a-zA-Z°/]+)\s+(?:to|in|into)\s+([a-zA-Z°/]+)"
+        match = re.search(pattern, query.lower())
+        if not match:
+            return None
+
+        val, from_u, to_u = float(match.group(1)), match.group(2).replace("°", "").strip(), match.group(3).replace("°", "").strip()
+
+        # Normalize common names
+        norm_map = {
+            "kilometer": "km", "kilometers": "km", "mile": "miles", "metre": "m", "meter": "m",
+            "meters": "m", "foot": "feet", "inch": "inches", "celsius": "c", "centigrade": "c",
+            "fahrenheit": "f", "kelvin": "k", "kilogram": "kg", "kilograms": "kg", "pound": "lbs",
+            "pounds": "lbs", "gram": "g", "grams": "g", "ounce": "oz", "ounces": "oz",
+        }
+        from_norm = norm_map.get(from_u, from_u)
+        to_norm = norm_map.get(to_u, to_u)
+
+        key = (from_norm, to_norm)
+        if key in cls.UNIT_CONVERSIONS:
+            converted = cls.UNIT_CONVERSIONS[key](val)
+            steps = [f"Convert {val} {from_u} to {to_u}", f"Result: {converted:.4f} {to_u}"]
+            return {"type": "unit_conversion", "result": round(converted, 4), "steps": steps}
+
+        return None
+
+    @classmethod
+    def solve_statistics(cls, numbers: List[float]) -> Dict[str, Any]:
+        """Calculates standard descriptive statistics."""
+        if not numbers:
+            raise ValueError("Number list cannot be empty.")
+        n = len(numbers)
+        s_mean = sum(numbers) / n
+        s_sorted = sorted(numbers)
+        s_median = s_sorted[n // 2] if n % 2 != 0 else (s_sorted[n // 2 - 1] + s_sorted[n // 2]) / 2
+        variance = sum((x - s_mean) ** 2 for x in numbers) / max(1, n - 1)
+        stdev = math.sqrt(variance)
+
+        return {
+            "count": n,
+            "sum": round(sum(numbers), 4),
+            "mean": round(s_mean, 4),
+            "median": round(s_median, 4),
+            "min": min(numbers),
+            "max": max(numbers),
+            "stdev": round(stdev, 4),
+        }
+
+
+def solve_math_problem(query: str) -> Dict[str, Any]:
+    """Unified entry-point for all mathematical and quantitative problems."""
+    raw = query.strip().rstrip("?!. \t")
+    clean = re.sub(r"(?i)^(solve|calculate|what is|compute|find|evaluate)\s*:?\s*", "", raw).strip("?!. \t")
+
+    # Support common English phrasing
+    clean = re.sub(r"(?i)square root of\s*(\d+(?:\.\d+)?)", r"sqrt(\1)", clean)
+    clean = re.sub(r"(?i)cube root of\s*(\d+(?:\.\d+)?)", r"cbrt(\1)", clean)
+
+    candidates = [clean, raw]
+
+    # Extract any arithmetic / algebraic substring
+    math_match = re.search(r"(\d+[\d\s\+\-\*\/\^\.\(\)]+[\d\)])", clean)
+    if math_match:
+        candidates.append(math_match.group(1).strip())
+
+    for target in candidates:
+        if not target:
+            continue
+
+        # 1. Algebraic Linear Equations
+        lin_res = AdvancedMathSolver.solve_linear_equation(target)
+        if lin_res:
+            steps_text = "\n".join(f"  {i+1}. {s}" for i, s in enumerate(lin_res["steps"]))
+            return {
+                "success": True,
+                "result": lin_res["result"],
+                "explanation": f"**Algebraic Solution:**\n{steps_text}\n\n**Final Answer:** `x = {lin_res['result']}`",
+            }
+
+        # 2. Quadratic Equations
+        quad_res = AdvancedMathSolver.solve_quadratic_equation(target)
+        if quad_res:
+            steps_text = "\n".join(f"  {i+1}. {s}" for i, s in enumerate(quad_res["steps"]))
+            return {
+                "success": True,
+                "result": quad_res["result"],
+                "explanation": f"**Quadratic Solution:**\n{steps_text}\n\n**Roots:** `{quad_res['result']}`",
+            }
+
+        # 3. Unit Conversions
+        conv_res = AdvancedMathSolver.convert_units(target)
+        if conv_res:
+            return {
+                "success": True,
+                "result": conv_res["result"],
+                "explanation": f"**Unit Conversion:**\n  • {conv_res['steps'][0]}\n\n**Result:** **{conv_res['result']}**",
+            }
+
+        # 4. Percentages
+        pct_res = AdvancedMathSolver.solve_percentage(target)
+        if pct_res:
+            steps_text = "\n".join(f"  • {s}" for s in pct_res["steps"])
+            return {
+                "success": True,
+                "result": pct_res["result"],
+                "explanation": f"**Percentage Calculation:**\n{steps_text}\n\n**Final Answer:** **{pct_res['result']}**",
+            }
+
+    # 5. Direct Scientific / Arithmetic Evaluation
+    for target in candidates:
+        if not target:
+            continue
+        try:
+            val = SafeCalculator.evaluate(target)
+            return {
+                "success": True,
+                "result": val,
+                "explanation": f"**Calculation:** `{target}` = **{val}**",
+            }
+        except Exception:
+            pass
+
+    return {"success": False, "error": f"Could not solve: {query}"}
+
+
 def calculate_expression(expression: str) -> str:
-    """Safe calculator tool function."""
-    try:
-        val = SafeCalculator.evaluate(expression)
-        return str(val)
-    except Exception as e:
-        return f"Math error: {str(e)}"
+    """Safe calculator tool function with unified math solver fallback."""
+    res = solve_math_problem(expression)
+    if res.get("success"):
+        return str(res["result"])
+    return f"Math error: {res.get('error', 'Unable to evaluate')}"
 
 
 def get_current_datetime() -> str:
@@ -85,12 +393,11 @@ def read_project_file(relative_path: str, base_dir: Path = Path(".")) -> str:
     target = (base / relative_path).resolve()
 
     if not str(target).startswith(str(base)):
-        raise PermissionError(f"Access denied: path traversal attempt outside project directory.")
+        raise PermissionError("Access denied: path traversal attempt outside project directory.")
 
     if not target.is_file():
         raise FileNotFoundError(f"File not found: {relative_path}")
 
-    # Prevent reading virtual environments or large binary files
     if ".venv" in target.parts or ".git" in target.parts:
         raise PermissionError("Access denied to virtual environment or git internals.")
 
@@ -131,9 +438,16 @@ def register_builtin_tools(registry: ToolRegistry, project_root: Path = Path("."
     """Registers standard safe tools into the tool registry."""
     registry.register(ToolDefinition(
         name="calculator",
-        description="Safely evaluates arithmetic expressions (e.g., '14 * 12 + sqrt(16)').",
-        parameters={"expression": "string arithmetic expression"},
+        description="Evaluates arithmetic and scientific expressions (e.g., '14 * 12 + sqrt(16)').",
+        parameters={"expression": "string arithmetic or scientific expression"},
         execute_fn=calculate_expression,
+    ))
+
+    registry.register(ToolDefinition(
+        name="math_solver",
+        description="Solves algebraic equations (ax+b=c, ax^2+bx+c=0), percentages, and unit conversions.",
+        parameters={"query": "mathematical query, equation, or conversion string"},
+        execute_fn=lambda query: solve_math_problem(query).get("explanation", "Could not solve"),
     ))
 
     registry.register(ToolDefinition(
@@ -156,4 +470,3 @@ def register_builtin_tools(registry: ToolRegistry, project_root: Path = Path("."
         parameters={"query": "search query"},
         execute_fn=lambda query: search_codebase(query, project_root),
     ))
-

@@ -273,7 +273,7 @@ class TestModernLLMSystem(unittest.TestCase):
     # 23. Packaging & clean imports
     def test_23_packaging_imports(self):
         import src
-        self.assertEqual(src.__version__, "2.0.0")
+        self.assertEqual(src.__version__, "2.1.0")
 
     # 24. Git ignore and large-file checks
     def test_24_gitignore_and_large_files(self):
@@ -281,6 +281,83 @@ class TestModernLLMSystem(unittest.TestCase):
         self.assertIn(".venv/", gitignore)
         self.assertIn("*.dll", gitignore)
         self.assertIn("books_txt/", gitignore)
+
+    # 25. KV Cache acceleration and step correctness
+    def test_25_kv_cache_acceleration_and_correctness(self):
+        cfg = ModelConfig.preset_tiny(vocab_size=100)
+        model = ModernTransformer(cfg)
+        model.eval()
+
+        # Full sequence without cache
+        tokens = torch.randint(0, 100, (1, 6))
+        logits_full, _ = model(tokens)
+
+        # Step-by-step with KV Cache
+        caches = model.create_kv_caches()
+        # Prefill first 5 tokens
+        logits_prefill, _ = model(tokens[:, :5], kv_caches=caches, start_pos=0)
+        # Step with 6th token
+        logits_step, _ = model(tokens[:, 5:6], kv_caches=caches, start_pos=5)
+
+        # Logits for the 6th token should match full sequence computation
+        self.assertTrue(torch.allclose(logits_full[:, 5, :], logits_step[:, 0, :], atol=1e-4))
+
+    # 26. RoPE context extrapolation
+    def test_26_rope_context_extrapolation(self):
+        cfg = ModelConfig.preset_tiny(vocab_size=100)
+        cfg.block_size = 64
+        cfg.max_seq_len = 256
+        model = ModernTransformer(cfg)
+        model.eval()
+
+        # Sequence longer than base block_size (128 > 64)
+        extended_tokens = torch.randint(0, 100, (1, 128))
+        logits, _ = model(extended_tokens)
+        self.assertEqual(logits.shape, (1, 128, 100))
+
+    # 27. Advanced Math & Equation Solver
+    def test_27_advanced_math_solver(self):
+        from src.tools.builtin import solve_math_problem, AdvancedMathSolver
+        # Linear equation
+        lin = solve_math_problem("Solve: 4x + 20 = 100")
+        self.assertTrue(lin["success"])
+        self.assertEqual(lin["result"], 20.0)
+
+        # Quadratic equation
+        quad = solve_math_problem("x^2 - 7x + 12 = 0")
+        self.assertTrue(quad["success"])
+        self.assertEqual(quad["result"], [4.0, 3.0])
+
+        # Percentage
+        pct = solve_math_problem("What is 15% of 200?")
+        self.assertTrue(pct["success"])
+        self.assertEqual(pct["result"], 30.0)
+
+        # Unit conversion
+        conv = solve_math_problem("Convert 100 km to miles")
+        self.assertTrue(conv["success"])
+        self.assertAlmostEqual(conv["result"], 62.1371, places=3)
+
+        # Statistics
+        stats = AdvancedMathSolver.solve_statistics([10, 20, 30, 40, 50])
+        self.assertEqual(stats["mean"], 30.0)
+        self.assertEqual(stats["median"], 30.0)
+
+    # 28. Claude / ChatGPT-style CoT Reasoning
+    def test_28_claude_chatgpt_style_cot_reasoning(self):
+        from src.reasoning.orchestrator import ReasoningOrchestrator
+        orchestrator = ReasoningOrchestrator()
+
+        # Mathematical request
+        prep_math = orchestrator.prepare_reasoning("Solve: 2x + 10 = 50")
+        self.assertEqual(prep_math.intent, "mathematical")
+        self.assertIn("1. Intent Analysis:", prep_math.thinking)
+        self.assertIn("20.0", prep_math.direct_answer)
+
+        # Complex task request
+        prep_complex = orchestrator.prepare_reasoning("Compare Python and C++ step by step")
+        self.assertEqual(prep_complex.intent, "complex-task")
+        self.assertIn("1. Intent Analysis:", prep_complex.thinking)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 """
-Modern Tiny LLM AI Assistant CLI (v2.0.0)
-High-performance terminal interface with real-time streaming, ANSI styling,
+Modern Tiny LLM AI Assistant CLI (v2.1.0)
+High-performance terminal interface with real-time streaming, KV-cache acceleration,
+Claude/ChatGPT-style Chain-of-Thought thinking, Advanced Math & Algebra solver,
 RAG search, AST verifications, SQLite memory, and live checkpoint switching.
 """
 import argparse
@@ -23,7 +24,7 @@ from ..models.transformer import ModernTransformer
 from ..generation.sampler import TextGenerator, SamplingConfig
 from ..generation.template import ChatTemplate, ChatMessage
 from ..tools.registry import ToolRegistry
-from ..tools.builtin import register_builtin_tools
+from ..tools.builtin import register_builtin_tools, solve_math_problem
 from ..reasoning.orchestrator import ReasoningOrchestrator
 from ..rag.pipeline import LocalRAGPipeline
 from ..memory.conversation_db import ConversationDatabase
@@ -84,7 +85,7 @@ def load_model_safely(ckpt_path: Path, device: str):
 
     if ckpt_format == "v2_modern":
         model, payload = load_modern_checkpoint(ckpt_path, device=device)
-        return model, f"Modern Transformer v2.0 (step {payload.get('step', 0)}, val_loss {payload.get('val_loss', 'N/A')})"
+        return model, f"Modern Transformer v2.1 (step {payload.get('step', 0)}, val_loss {payload.get('val_loss', 'N/A')})"
     elif ckpt_format == "v1_legacy_bpe":
         try:
             from model_bpe import TinyBPEGPT
@@ -108,11 +109,12 @@ def load_model_safely(ckpt_path: Path, device: str):
 
 def print_banner(model_name: str, model_desc: str, device: str, rag_chunks: int, tool_count: int):
     print(f"\n{C.CYAN}{C.BOLD}{'=' * 68}")
-    print("   MODERN TINY LLM AI ASSISTANT (v2.0.0) - TERMINAL CONSOLE")
+    print("   MODERN TINY LLM AI ASSISTANT (v2.1.0) - TERMINAL CONSOLE")
     print(f"{'=' * 68}{C.RESET}")
     print(f" {C.WHITE}Model:{C.RESET}    {C.GREEN}{model_name}{C.RESET} ({model_desc})")
-    print(f" {C.WHITE}Hardware:{C.RESET} {C.YELLOW}{device.upper()}{C.RESET} | {C.WHITE}RAG Knowledge:{C.RESET} {C.MAGENTA}{rag_chunks:,} chunks indexed{C.RESET}")
-    print(f" {C.WHITE}Tools:{C.RESET}    {C.CYAN}{tool_count} registered{C.RESET} | {C.WHITE}Memory:{C.RESET} {C.GREEN}SQLite persistent{C.RESET}")
+    print(f" {C.WHITE}Hardware:{C.RESET} {C.YELLOW}{device.upper()}{C.RESET} | {C.WHITE}Acceleration:{C.RESET} {C.GREEN}KV-Cache O(1) Active{C.RESET}")
+    print(f" {C.WHITE}RAG Knowledge:{C.RESET} {C.MAGENTA}{rag_chunks:,} chunks indexed{C.RESET} | {C.WHITE}Memory:{C.RESET} {C.GREEN}SQLite persistent{C.RESET}")
+    print(f" {C.WHITE}Math Solver:{C.RESET}   {C.CYAN}Algebra, Calculus, Percentages, Units, Stats Active{C.RESET}")
     print(f"{C.GRAY}{'-' * 68}{C.RESET}")
     print(f" Type your prompt or command. {C.YELLOW}/help{C.RESET} for all available commands.")
     print(f"{C.GRAY}{'=' * 68}{C.RESET}\n")
@@ -122,11 +124,12 @@ def print_help():
     print(f"\n{C.BOLD}{C.CYAN}--- AVAILABLE COMMANDS ---{C.RESET}")
     print(f"  {C.YELLOW}/help{C.RESET}                Show this command manual")
     print(f"  {C.YELLOW}/exit{C.RESET} or {C.YELLOW}/quit{C.RESET}         Exit the assistant")
+    print(f"  {C.YELLOW}/think [on|off]{C.RESET}      Toggle Claude/ChatGPT-style internal thinking traces")
     print(f"  {C.YELLOW}/stream [on|off]{C.RESET}     Toggle real-time streaming token generation")
     print(f"  {C.YELLOW}/rag [on|off]{C.RESET}        Enable/disable local RAG document retrieval")
     print(f"  {C.YELLOW}/rag search <query>{C.RESET}  Search local knowledge corpus and view citations")
     print(f"  {C.YELLOW}/tools{C.RESET}               List all registered tool schemas and permissions")
-    print(f"  {C.YELLOW}/calc <expression>{C.RESET}   Run safe AST calculator directly (e.g. /calc 2**10 + 45)")
+    print(f"  {C.YELLOW}/calc <query>{C.RESET}        Run math solver (e.g. /calc 2x+10=50, /calc 20% of 150, /calc 100 km to mi)")
     print(f"  {C.YELLOW}/model{C.RESET}               List available checkpoints in checkpoints/")
     print(f"  {C.YELLOW}/model <filename>{C.RESET}    Switch active checkpoint on the fly")
     print(f"  {C.YELLOW}/temp <float>{C.RESET}        Set temperature (default: 0.70)")
@@ -134,13 +137,13 @@ def print_help():
     print(f"  {C.YELLOW}/topp <float>{C.RESET}        Set nucleus top-p sampling (default: 0.90)")
     print(f"  {C.YELLOW}/history{C.RESET}             Show recent messages from SQLite memory")
     print(f"  {C.YELLOW}/clear{C.RESET}               Clear current conversation memory context")
-    print(f"  {C.YELLOW}/stats{C.RESET}               Show system parameters, RAM, and hardware metrics")
+    print(f"  {C.YELLOW}/stats{C.RESET}               Show system parameters, RAM, context window, and acceleration metrics")
     print(f"  {C.YELLOW}/system <prompt>{C.RESET}     Set active system persona / prompt")
     print(f"{C.GRAY}{'-' * 40}{C.RESET}\n")
 
 
 def launch_cli():
-    parser = argparse.ArgumentParser(description="Modern Tiny LLM AI Assistant (v2.0.0)")
+    parser = argparse.ArgumentParser(description="Modern Tiny LLM AI Assistant (v2.1.0)")
     parser.add_argument("--checkpoint", default=None, help="Path to model checkpoint")
     parser.add_argument("--tokenizer", default="tokenizer_bpe.json")
     parser.add_argument("--device", default="auto", help="auto, cpu, cuda, or mps")
@@ -149,6 +152,7 @@ def launch_cli():
     parser.add_argument("--top-k", type=int, default=40)
     parser.add_argument("--tokens", type=int, default=120)
     parser.add_argument("--rag", action="store_true", help="Start with RAG enabled")
+    parser.add_argument("--think", action="store_true", default=True, help="Enable Chain-of-Thought thinking")
     args = parser.parse_args()
 
     project_root = Path(__file__).resolve().parent.parent.parent
@@ -194,6 +198,7 @@ def launch_cli():
     orchestrator = ReasoningOrchestrator(
         rag_pipeline=rag if args.rag else None,
         tool_registry=tools,
+        enable_thinking=args.think,
     )
 
     # Find and Load Checkpoint
@@ -208,6 +213,7 @@ def launch_cli():
         max_new_tokens=args.tokens,
     )
     stream_output = True
+    show_thinking = True
     rag_enabled = args.rag
     system_persona = "You are a helpful, precise AI assistant powered by Modern Transformer v2."
 
@@ -242,6 +248,15 @@ def launch_cli():
 
         elif lead == "/help":
             print_help()
+            continue
+
+        elif lead == "/think":
+            if len(cmd) > 1 and cmd[1] in ["off", "false", "0"]:
+                show_thinking = False
+                print(f"{C.GRAY}[Chain-of-Thought thinking display disabled]{C.RESET}")
+            else:
+                show_thinking = True
+                print(f"{C.GRAY}[Chain-of-Thought thinking display enabled]{C.RESET}")
             continue
 
         elif lead == "/stream":
@@ -292,13 +307,13 @@ def launch_cli():
         elif lead == "/calc":
             expr = " ".join(user_input.split()[1:])
             if not expr:
-                print(f"{C.RED}Usage: /calc 25 * 4 + 10{C.RESET}")
+                print(f"{C.RED}Usage: /calc 2x + 10 = 50  OR  /calc 20% of 150  OR  /calc 100 km to miles{C.RESET}")
             else:
-                res = tools.execute("calculator", {"expression": expr})
+                res = solve_math_problem(expr)
                 if res.get("success"):
-                    print(f"{C.GREEN}Result:{C.RESET} {res['result']}")
+                    print(f"\n{res.get('explanation')}\n")
                 else:
-                    print(f"{C.RED}Error:{C.RESET} {res.get('error')}")
+                    print(f"{C.RED}Math Error:{C.RESET} {res.get('error')}")
             continue
 
         elif lead == "/model":
@@ -389,12 +404,14 @@ def launch_cli():
                 cfg = model.config
                 print(f"  {C.WHITE}Layers/Heads:{C.RESET}      {cfg.n_layer} layers / {cfg.n_head} attention heads")
                 print(f"  {C.WHITE}Embedding Dim:{C.RESET}     {cfg.n_embd} dimensions")
-                print(f"  {C.WHITE}Context Window:{C.RESET}    {cfg.block_size} tokens")
+                print(f"  {C.WHITE}Context Window:{C.RESET}    {cfg.block_size} tokens base (RoPE extrapolated to 1,024+)")
                 print(f"  {C.WHITE}Parameters:{C.RESET}        {sum(p.numel() for p in model.parameters()):,} trainable")
+            print(f"  {C.WHITE}KV-Cache Acceleration:{C.RESET} {C.GREEN}ENABLED (O(1) Step Generation){C.RESET}")
             print(f"  {C.WHITE}Compute Device:{C.RESET}    {device.upper()}")
             print(f"  {C.WHITE}RAG Index Chunks:{C.RESET}  {len(rag.chunks):,}")
             print(f"  {C.WHITE}Memory DB:{C.RESET}         {db_path.name}")
             print(f"  {C.WHITE}Streaming:{C.RESET}         {'ON' if stream_output else 'OFF'}")
+            print(f"  {C.WHITE}Thinking Trace:{C.RESET}    {'VISIBLE' if show_thinking else 'HIDDEN'}")
             print(f"  {C.WHITE}Temperature:{C.RESET}       {sampling_cfg.temperature:.2f}")
             print(f"  {C.WHITE}Max Tokens:{C.RESET}        {sampling_cfg.max_new_tokens}")
             print(f"{C.GRAY}{'-' * 40}{C.RESET}\n")
@@ -402,53 +419,66 @@ def launch_cli():
 
         # Standard Processing: Store in SQLite Memory
         memory.add_message(session_id, "user", user_input)
-
-        # Generator function supporting real-time token streaming
         generator = TextGenerator(model, tokenizer) if model else None
 
-        def run_generation(prompt: str) -> str:
-            if not generator:
-                return "Model weights not loaded. Please select a valid checkpoint via /model."
+        # Stage 1: Prepare Reasoning, Intent, Thinking, and Tools
+        t0 = time.time()
+        prep = orchestrator.prepare_reasoning(user_input)
 
-            if stream_output:
-                # Real-time token streaming directly to terminal
-                prompt_ids = tokenizer.encode(prompt).ids
+        # Display Claude/ChatGPT-style internal thinking trace if enabled
+        if show_thinking and prep.thinking:
+            print(f"\n{C.GRAY}╭─ <thinking> ────────────────────────────────────────{C.RESET}")
+            for t_line in prep.thinking.splitlines():
+                print(f"{C.GRAY}│ {t_line}{C.RESET}")
+            print(f"{C.GRAY}╰─────────────────────────────────────────────────────{C.RESET}")
+
+        # Print AI Header
+        print(f"\n{C.BOLD}{C.CYAN}AI {C.YELLOW}[{prep.intent}]{C.CYAN} > {C.RESET}", end="")
+        sys.stdout.flush()
+
+        # Stage 2: Execution / Output
+        if prep.direct_answer:
+            final_text = prep.direct_answer
+            print(final_text)
+            verifications = prep.verifications
+        else:
+            if not generator:
+                final_text = "Model weights not loaded. Please select a valid checkpoint via /model."
+                print(final_text)
+            elif stream_output:
+                prompt_ids = tokenizer.encode(prep.prompt_with_context).ids
                 pieces = []
                 for chunk in generator.generate_stream(prompt_ids, config=sampling_cfg, device=device):
                     sys.stdout.write(chunk)
                     sys.stdout.flush()
                     pieces.append(chunk)
-                return "".join(pieces)
+                print()
+                final_text = "".join(pieces)
             else:
-                return generator.generate(prompt, config=sampling_cfg, device=device)
+                final_text = generator.generate(prep.prompt_with_context, config=sampling_cfg, device=device)
+                print(final_text)
 
-        # Print AI header
-        intent = orchestrator.classify_intent(user_input)
-        print(f"\n{C.BOLD}{C.CYAN}AI {C.YELLOW}[{intent}]{C.CYAN} > {C.RESET}", end="")
-        sys.stdout.flush()
+            from ..reasoning.verifier import ResponseVerifier
+            verifications = [
+                ResponseVerifier.verify_math_claims(final_text).to_dict(),
+                ResponseVerifier.verify_python_code(final_text).to_dict(),
+            ]
+            if prep.retrieved_citations:
+                verifications.append(ResponseVerifier.verify_citations(final_text, prep.retrieved_citations).to_dict())
 
-        # Orchestrate reasoning & tool execution
-        t0 = time.time()
-        summary = orchestrator.orchestrate(user_input, generator_fn=run_generation)
         elapsed = time.time() - t0
 
-        # If non-streaming or tool output, print result
-        if not stream_output or intent in ["mathematical", "tool-assisted"]:
-            print(summary.final_answer)
-        else:
-            print()
-
-        # Display Verifications & Citations if present
-        for v in summary.verifications:
+        # Display Verifications & Citations
+        for v in verifications:
             if v.get("passed") and v.get("details"):
                 print(f"  {C.GRAY}{C.GREEN}[OK] {v.get('check')}: {v.get('details')}{C.RESET}")
 
-        for cite in summary.retrieved_citations:
+        for cite in prep.retrieved_citations:
             print(f"  {C.GRAY}{C.MAGENTA}[Citation] {cite}{C.RESET}")
 
         print(f"{C.GRAY}({elapsed:.2f}s){C.RESET}")
 
-        memory.add_message(session_id, "assistant", summary.final_answer)
+        memory.add_message(session_id, "assistant", final_text)
 
 
 if __name__ == "__main__":

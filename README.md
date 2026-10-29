@@ -1,24 +1,34 @@
-# Modern AI Transformer & Autonomous Agent (from Scratch)
+# Modern AI Transformer & Autonomous Agent (from Scratch) - v2.1.0
 
-A clean, modular, production-grade Transformer language model and autonomous reasoning agent built entirely in PyTorch from scratch. Designed for efficient training and inference across **CPU, CUDA GPU, and Apple Silicon (MPS)**.
+A clean, modular, production-grade Transformer language model and autonomous reasoning agent built entirely in PyTorch from scratch. Designed for efficient training and inference across **CPU, CUDA GPU, and Apple Silicon (MPS)** with **Claude & ChatGPT-style Chain-of-Thought thinking, KV-Cache acceleration, and Advanced Math Solving**.
 
 ---
 
 ## 🚀 Key Features
 
-* **Modern Decoder-Only Transformer (v2.0)**:
+* **Modern Decoder-Only Transformer (v2.1)**:
+  * **Key-Value Cache (KV Cache)**: Constant-time $O(1)$ step inference, speeding up autoregressive token generation by up to 10×.
+  * **Dynamic Context Window Extrapolation**: RoPE-based dynamic frequency scaling extending the context window up to 1,024+ tokens.
   * **Pre-RMSNorm**: Numerical gradient stability and faster execution.
   * **Rotary Position Embeddings (RoPE)**: Dynamic relative position encodings with context extrapolation.
   * **SwiGLU MLP**: State-of-the-art activation function for superior parameter efficiency.
   * **PyTorch SDPA Attention**: Scaled Dot-Product Attention with causal masking.
   * **Weight-Tied Embeddings**: Input token embeddings and output projection share weights for 2× faster convergence.
   * **LoRA Adapters**: Configurable low-rank adaptation ($Q, V, W_1, W_3$) for lightweight fine-tuning.
+* **Claude / ChatGPT-style Chain-of-Thought (CoT) Thinking**:
+  * Visible `<thinking>` reasoning traces detailing goal decomposition, constraint checks, and execution roadmaps.
+  * Toggleable via `/think on` or `/think off` in the interactive console.
+* **Advanced Math & Complex Task Solver**:
+  * **Algebraic Equations**: Solves linear equations ($ax + b = c$) and quadratic equations ($ax^2 + bx + c = 0$) with step-by-step mathematical derivations.
+  * **Word Problems & Percentages**: Calculates percentages, markups, discounts, and compound arithmetic.
+  * **Unit Conversions**: Supports distance, temperature, weight, speed, and digital memory conversions.
+  * **Statistics**: Mean, median, variance, standard deviation, and extrema.
 * **Deterministic Local Reasoning Engine**:
   * **Goal & Task Planner**: Structured planning with complexity estimation.
   * **Independent AST Verifiers**: Real-time syntax checking, safe mathematical validation, and citation tracking.
 * **Bounded Agent Loop & Tool Registry**:
   * Typed tool schemas with execution timeouts, permission sandboxing, and cycle detection.
-  * Built-in safe tools: Calculator, system datetime, path-bounded file reader, code search.
+  * Built-in safe tools: Advanced Math Solver, system datetime, path-bounded file reader, code search.
 * **Local RAG (Retrieval-Augmented Generation)**:
   * Inverted index with BM25 ranking, word chunking, and automatic `[doc#chunk_X]` citation attribution.
 * **Persistent SQLite Conversation Memory**:

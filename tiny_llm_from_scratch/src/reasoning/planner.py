@@ -25,7 +25,7 @@ class TaskPlan:
 
 
 class TaskPlanner:
-    """Generates structured task plans for complex requests."""
+    """Generates structured task plans and decomposes complex user requests."""
 
     @classmethod
     def create_plan(cls, goal: str, intent: str, complexity: str) -> TaskPlan:
@@ -34,35 +34,59 @@ class TaskPlanner:
         if intent == "mathematical":
             plan.subtasks.append(SubTask(
                 id=1,
-                description="Extract arithmetic equation and evaluate with verified calculator.",
-                tool="calculator",
-                args={"expression": goal},
-                expected_output="Deterministic numerical value",
+                description="Parse mathematical structure (arithmetic, algebra, percentage, or unit conversion).",
+                tool="math_solver",
+                args={"query": goal},
+                expected_output="Verified numerical solution and step-by-step derivation",
             ))
-            plan.verification_checks.append("Verify calculation consistency.")
+            plan.verification_checks.append("Verify calculation correctness and dimensional consistency.")
+
+        elif intent == "complex-task":
+            plan.subtasks.append(SubTask(
+                id=1,
+                description="Decompose objective into sequential requirements and constraints.",
+                expected_output="Logical execution blueprint",
+            ))
+            plan.subtasks.append(SubTask(
+                id=2,
+                description="Execute intermediate reasoning and retrieve supporting knowledge or tools.",
+                expected_output="Subtask artifacts and computations",
+            ))
+            plan.subtasks.append(SubTask(
+                id=3,
+                description="Synthesize structured comprehensive response.",
+                expected_output="Final organized answer",
+            ))
+            plan.verification_checks.append("Verify all requirements from prompt are fully satisfied.")
 
         elif intent == "programming":
             plan.subtasks.append(SubTask(
                 id=1,
-                description="Formulate code solution.",
-                expected_output="Python code snippet",
+                description="Design algorithm and define clean Python code implementation.",
+                expected_output="Python code snippet with docstrings and type annotations",
             ))
             plan.verification_checks.append("Verify Python code syntax via AST parser.")
 
         elif intent == "document-based":
             plan.subtasks.append(SubTask(
                 id=1,
-                description="Retrieve relevant document chunks via local RAG.",
+                description="Retrieve relevant document chunks via local BM25 RAG.",
                 expected_output="Citations and evidence text",
             ))
-            plan.verification_checks.append("Confirm all factual claims are backed by citations.")
+            plan.verification_checks.append("Confirm all factual assertions match retrieved citations.")
+
+        elif intent == "tool-assisted":
+            plan.subtasks.append(SubTask(
+                id=1,
+                description="Query registered environment tools (datetime, filesystem, or codebase).",
+                expected_output="Deterministic tool response",
+            ))
 
         else:
             plan.subtasks.append(SubTask(
                 id=1,
-                description="Formulate direct response.",
-                expected_output="Helpful answer",
+                description="Formulate direct, helpful, and logical response.",
+                expected_output="Well-reasoned response",
             ))
 
         return plan
-

@@ -21,7 +21,10 @@ class ModelConfig:
     tie_weights: bool = True
     init_std: float = 0.02
     rope_theta: float = 10000.0
-    arch_version: str = "2.0.0"
+    max_seq_len: int = 1024          # Dynamic extended context window limit
+    rope_scaling_factor: float = 1.0 # RoPE linear frequency scaling factor
+    use_kv_cache: bool = True        # Fast O(1) inference with Key-Value Cache
+    arch_version: str = "2.1.0"
 
     def __post_init__(self):
         if self.n_embd % self.n_head != 0:

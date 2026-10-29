@@ -19,7 +19,7 @@ class SamplingConfig:
 
 
 class TextGenerator:
-    """Robust autoregressive text generation engine supporting streaming, penalties, and stop tokens."""
+    """Robust autoregressive text generation engine with KV caching, streaming, and penalties."""
 
     def __init__(self, model, tokenizer: Tokenizer, default_config: Optional[SamplingConfig] = None):
         self.model = model
@@ -49,6 +49,7 @@ class TextGenerator:
             block_size = self.model.config.block_size
         else:
             block_size = 256
+
         generated_tokens = []
         token_frequencies = {}
 
@@ -56,10 +57,31 @@ class TextGenerator:
         for t in idx[0].tolist():
             token_frequencies[t] = token_frequencies.get(t, 0) + 1
 
-        for _ in range(cfg.max_new_tokens):
-            idx_cond = idx[:, -block_size:]
-            logits, _ = self.model(idx_cond)
-            logits = logits[:, -1, :].clone()  # (1, vocab_size)
+        # Check for Key-Value Cache capability
+        use_kv = hasattr(self.model, "create_kv_caches")
+        kv_caches = self.model.create_kv_caches() if use_kv else None
+
+        current_pos = 0
+        logits = None
+
+        if use_kv:
+            # Prefill phase: evaluate initial prompt
+            prompt_len = idx.shape[1]
+            logits, _ = self.model(idx, kv_caches=kv_caches, start_pos=0)
+            logits = logits[:, -1, :].clone()
+            current_pos = prompt_len
+            next_token = None
+
+        for step in range(cfg.max_new_tokens):
+            if not use_kv:
+                idx_cond = idx[:, -block_size:]
+                logits, _ = self.model(idx_cond)
+                logits = logits[:, -1, :].clone()
+            elif step > 0:
+                # O(1) step inference via KV cache
+                logits, _ = self.model(next_token, kv_caches=kv_caches, start_pos=current_pos)
+                logits = logits[:, -1, :].clone()
+                current_pos += 1
 
             # Check for NaN / Inf
             if torch.isnan(logits).any() or torch.isinf(logits).any():

@@ -8,3 +8,4 @@ if exist ".venv\Scripts\python.exe" (
     python chat.py %*
 )
 pause
+
