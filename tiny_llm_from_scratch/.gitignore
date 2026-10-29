@@ -1,0 +1,17 @@
+﻿.venv/
+venv/
+__pycache__/
+*.py[cod]
+.env
+.env.*
+!.env.example
+checkpoints/
+*.pt
+*.pth
+*.u16
+*.u16.json
+*.log
+*.tmp
+*.txt
+!requirements.txt
+!qa_seed.txt
