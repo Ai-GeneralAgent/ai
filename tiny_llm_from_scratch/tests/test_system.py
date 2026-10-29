@@ -467,6 +467,32 @@ class TestModernLLMSystem(unittest.TestCase):
         self.assertIsNotNone(prep.direct_answer)
         self.assertIn("What specific topic", prep.direct_answer)
 
+    # 36. Local Ollama Backend Graceful Offline Handling
+    def test_36_ollama_backend_safety(self):
+        from src.backends.ollama import OllamaClient
+        # Point to port that is not running
+        client = OllamaClient(host="http://localhost:59999")
+        self.assertFalse(client.is_server_running())
+        self.assertEqual(client.list_installed_models(), [])
+        res = client.generate("test prompt", model_name="nonexistent")
+        self.assertFalse(res["success"])
+        self.assertIn("not running", res["error"])
+
+    # 37. Backend Manager Provenance Labeling
+    def test_37_backend_manager_provenance_labeling(self):
+        from src.backends.manager import BackendManager, BackendSource
+        mgr = BackendManager(project_root=PROJECT_ROOT)
+        backends = mgr.list_available_backends()
+        self.assertIsInstance(backends, list)
+
+        # Set scratch model
+        cfg = ModelConfig.preset_tiny(vocab_size=self.tokenizer.get_vocab_size())
+        model = ModernTransformer(cfg)
+        mgr.set_scratch_model(model, Path("test_model.pt"))
+        gen_res = mgr.generate("Hello world", self.tokenizer, device="cpu")
+        self.assertIn("scratch_from_scratch", gen_res["backend_type"])
+        self.assertIn("[Source: From-Scratch", gen_res["label"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -202,3 +202,4 @@ class DPOTrainer:
             "reward_rejected": r_rejected.item(),
             "reward_margin": (r_chosen - r_rejected).item(),
         }
+
