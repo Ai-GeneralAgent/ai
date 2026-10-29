@@ -2091,5 +2091,57 @@
     "split": "train",
     "exclusion_reason": null,
     "fingerprint": "eaf7e31a0bd70e9a"
+  },
+  "doc_Learning_Python_b16d6424": {
+    "doc_id": "doc_Learning_Python_b16d6424",
+    "filename": "books/python/Learning_Python.txt",
+    "domain": "programming/python",
+    "char_count": 2627609,
+    "token_count": 0,
+    "language": "en",
+    "license_info": "unknown",
+    "duplicate_status": "unique",
+    "split": "train",
+    "exclusion_reason": null,
+    "fingerprint": "b16d64247610c7e9"
+  },
+  "doc_Geology_Class11_The_Earth_Matters_a0607d4b": {
+    "doc_id": "doc_Geology_Class11_The_Earth_Matters_a0607d4b",
+    "filename": "books/geology/Geology_Class11_The_Earth_Matters.txt",
+    "domain": "science/geology",
+    "char_count": 325456,
+    "token_count": 0,
+    "language": "en",
+    "license_info": "unknown",
+    "duplicate_status": "unique",
+    "split": "train",
+    "exclusion_reason": null,
+    "fingerprint": "a0607d4b86ada4d9"
+  },
+  "doc_HTML_CSS_The_Complete_Reference_b2042e74": {
+    "doc_id": "doc_HTML_CSS_The_Complete_Reference_b2042e74",
+    "filename": "books/web_development/HTML_CSS_The_Complete_Reference.txt",
+    "domain": "programming/web_development",
+    "char_count": 1680499,
+    "token_count": 0,
+    "language": "en",
+    "license_info": "unknown",
+    "duplicate_status": "unique",
+    "split": "train",
+    "exclusion_reason": null,
+    "fingerprint": "b2042e749859dd79"
+  },
+  "doc_JavaScript_Reference_869796ab": {
+    "doc_id": "doc_JavaScript_Reference_869796ab",
+    "filename": "books/javascript/JavaScript_Reference.txt",
+    "domain": "programming/javascript",
+    "char_count": 742164,
+    "token_count": 0,
+    "language": "en",
+    "license_info": "unknown",
+    "duplicate_status": "unique",
+    "split": "train",
+    "exclusion_reason": null,
+    "fingerprint": "869796ab22405e83"
   }
 }
