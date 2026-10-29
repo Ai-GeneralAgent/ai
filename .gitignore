@@ -1,0 +1,23 @@
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.dll
+*.exe
+*.pt
+*.pth
+*.bin
+*.u16
+*.u16.json
+*.log
+*.tmp
+
+# Data files
+books_txt/
+*data*.txt
+data.txt
+tiny_llm_from_scratch/*data*.txt
+tiny_llm_from_scratch/*.u16*
+tiny_llm_from_scratch/Mahabharata_Unabridged_English.txt
+tiny_llm_from_scratch/alice.txt
