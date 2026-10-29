@@ -26,3 +26,4 @@ $trainScript = Join-Path $PSScriptRoot "tiny_llm_from_scratch\train_modern.py"
 
 Write-Host "[TRAIN] Launching training on $Data for $Steps steps..." -ForegroundColor Cyan
 & $venvPython $trainScript --steps $Steps --batch-size $BatchSize --grad-accum $GradAccum --lr $LR --data $Data --device $Device
+

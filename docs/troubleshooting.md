@@ -86,3 +86,4 @@ This mixes 20% tokens from the base pretraining knowledge corpus with every inst
 
 #### Fix:
 Ensure that `tokenizer_bpe.json` (8,000 vocab size) is used consistently. Always pass `vocab_size=tokenizer.get_vocab_size()` to `ModelConfig.preset_small()`.
+

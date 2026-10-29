@@ -17,3 +17,4 @@ $evalScript = Join-Path $PSScriptRoot "tiny_llm_from_scratch\compare_models.py"
 
 Write-Host "[EVALUATE] Running empirical 6-task standardized evaluation benchmark..." -ForegroundColor Cyan
 & $venvPython $evalScript
+

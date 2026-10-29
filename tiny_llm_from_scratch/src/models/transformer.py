@@ -272,3 +272,35 @@ class ModernTransformer(nn.Module):
             unique_params = set(self.parameters())
             return sum(p.numel() for p in unique_params if p.requires_grad)
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
+
+    def estimate_memory_mb(self, batch_size: int = 1, seq_len: Optional[int] = None) -> Dict[str, float]:
+        """
+        Estimates runtime memory requirements (Section 4):
+        - Weights (FP32: 4 bytes/param, FP16: 2 bytes/param)
+        - KV Cache memory per forward step
+        - AdamW optimizer state (8 bytes/param for moments m and v)
+        """
+        seq = seq_len or self.config.block_size
+        n_params = self.count_parameters()
+
+        weights_fp32_mb = (n_params * 4) / (1024 * 1024)
+        weights_fp16_mb = (n_params * 2) / (1024 * 1024)
+
+        # KV Cache: 2 (K and V) * n_layers * batch_size * n_kv_heads * seq_len * head_dim * 4 bytes
+        head_dim = self.config.n_embd // self.config.n_head
+        n_kv = self.config.n_kv_head or self.config.n_head
+        kv_cache_bytes = 2 * self.config.n_layer * batch_size * n_kv * seq * head_dim * 4
+        kv_cache_mb = kv_cache_bytes / (1024 * 1024)
+
+        # Optimizer: 2 states (m, v) * 4 bytes = 8 bytes per trainable param + gradients (4 bytes)
+        optimizer_mb = (n_params * 12) / (1024 * 1024)
+
+        return {
+            "parameters_count": n_params,
+            "weights_fp32_mb": round(weights_fp32_mb, 2),
+            "weights_fp16_mb": round(weights_fp16_mb, 2),
+            "kv_cache_mb": round(kv_cache_mb, 2),
+            "training_adamw_overhead_mb": round(optimizer_mb, 2),
+            "total_inference_fp32_mb": round(weights_fp32_mb + kv_cache_mb, 2),
+            "total_training_fp32_mb": round(weights_fp32_mb + optimizer_mb + (kv_cache_mb * 2), 2),
+        }

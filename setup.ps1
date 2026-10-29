@@ -58,3 +58,4 @@ if ($LASTEXITCODE -eq 0) {
 } else {
     Write-Host "[WARNING] Setup completed with test warnings. Check output above." -ForegroundColor Yellow
 }
+

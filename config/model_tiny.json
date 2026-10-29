@@ -1,0 +1,21 @@
+{
+  "vocab_size": 8000,
+  "block_size": 128,
+  "n_embd": 128,
+  "n_head": 4,
+  "n_kv_head": 4,
+  "n_layer": 2,
+  "ffn_dim": 256,
+  "norm_type": "rmsnorm",
+  "norm_eps": 1e-06,
+  "pos_emb": "rope",
+  "ffn_type": "swiglu",
+  "attention_type": "mha",
+  "dropout": 0.0,
+  "tie_weights": true,
+  "init_std": 0.02,
+  "rope_theta": 10000.0,
+  "arch_version": "2.1.0",
+  "max_seq_len": 512,
+  "use_kv_cache": true
+}

@@ -70,3 +70,4 @@
   * `pretrained_local_ollama`: Optional local pretrained models running via Ollama.
   * `teacher_distillation`: Teacher models used strictly to synthesize candidate instruction datasets and provide critiques.
 * **Zero Silent Substitutions**: Every generated output carries explicit origin attribution labels.
+

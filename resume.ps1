@@ -22,3 +22,4 @@ $trainScript = Join-Path $PSScriptRoot "tiny_llm_from_scratch\train_modern.py"
 
 Write-Host "[RESUME] Resuming training from checkpoint $Checkpoint for $Steps steps..." -ForegroundColor Cyan
 & $venvPython $trainScript --resume $Checkpoint --steps $Steps --lr $LR
+

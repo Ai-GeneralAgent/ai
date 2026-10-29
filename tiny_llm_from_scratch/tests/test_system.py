@@ -493,6 +493,28 @@ class TestModernLLMSystem(unittest.TestCase):
         self.assertIn("scratch_from_scratch", gen_res["backend_type"])
         self.assertIn("[Source: From-Scratch", gen_res["label"])
 
+    # 38. Model Memory Estimates (Section 4)
+    def test_38_model_memory_estimates(self):
+        cfg = ModelConfig.preset_tiny(vocab_size=self.tokenizer.get_vocab_size())
+        model = ModernTransformer(cfg)
+        mem = model.estimate_memory_mb(batch_size=2, seq_len=128)
+        self.assertIn("weights_fp32_mb", mem)
+        self.assertIn("kv_cache_mb", mem)
+        self.assertIn("training_adamw_overhead_mb", mem)
+        self.assertGreater(mem["weights_fp32_mb"], 0.0)
+        self.assertGreater(mem["kv_cache_mb"], 0.0)
+
+    # 39. Modular Architecture Imports (Section 3)
+    def test_39_modular_architecture_imports(self):
+        from src.tokenizer import BPETokenizer, load_tokenizer
+        from src.agents import BoundedAgentLoop
+        from src.retrieval import LocalRAGPipeline
+        from src.utils import clamp_blas_threads, detect_device, get_hardware_info
+        bpe = BPETokenizer.from_file(self.tok_path)
+        self.assertEqual(bpe.vocab_size, self.tokenizer.get_vocab_size())
+        hw = get_hardware_info()
+        self.assertIn("logical_cpus", hw)
+
 
 if __name__ == "__main__":
     unittest.main()
