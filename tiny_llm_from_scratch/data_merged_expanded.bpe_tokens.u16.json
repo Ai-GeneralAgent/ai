@@ -1,0 +1,9 @@
+{
+  "data_size": 81955103,
+  "data_mtime_ns": 1793216323355561200,
+  "tokenizer_path": "C:\\Users\\YUVRAJ\\OneDrive\\Desktop\\New folder\\tiny_llm_from_scratch\\tokenizer_bpe.json",
+  "tokenizer_size": 543751,
+  "tokenizer_mtime_ns": 1793215601317281000,
+  "vocab_size": 8000,
+  "token_count": 21560590
+}
