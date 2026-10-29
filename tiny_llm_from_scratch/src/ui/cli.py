@@ -29,6 +29,7 @@ from ..models.checkpoint import load_modern_checkpoint, inspect_checkpoint
 from ..models.transformer import ModernTransformer
 from ..generation.sampler import TextGenerator, SamplingConfig
 from ..generation.template import ChatTemplate, ChatMessage
+from ..generation.optimizer import OutputOptimizer
 from ..tools.registry import ToolRegistry
 from ..tools.builtin import register_builtin_tools, solve_math_problem
 from ..reasoning.orchestrator import ReasoningOrchestrator
@@ -61,8 +62,10 @@ def discover_best_checkpoint(project_root: Path, requested: Optional[str] = None
             return p
 
     candidates = [
+        project_root / "checkpoints" / "modern_master_20min_best.pt",
         project_root / "checkpoints" / "modern_chat_finetuned.pt",
         project_root / "checkpoints" / "modern_production_v2_best.pt",
+        project_root / "checkpoints" / "modern_master_v2_10k_base.pt",
         project_root / "checkpoints" / "modern_base_v2_best.pt",
         project_root / "checkpoints" / "modern_knowledge_v2_best.pt",
         project_root / "checkpoints" / "modern_tiny_transformer_best.pt",
@@ -507,25 +510,33 @@ def launch_cli():
 
         # Stage 2: Execution / Output
         if prep.direct_answer:
-            final_text = prep.direct_answer
+            final_text = OutputOptimizer.optimize(prep.direct_answer, thinking_trace=prep.thinking, intent=prep.intent)
             print(final_text)
             verifications = prep.verifications
         else:
             if not generator:
                 final_text = "Model weights not loaded. Please select a valid checkpoint via /model."
                 print(final_text)
-            elif stream_output:
-                prompt_ids = tokenizer.encode(prep.prompt_with_context).ids
-                pieces = []
-                for chunk in generator.generate_stream(prompt_ids, config=sampling_cfg, device=device):
-                    sys.stdout.write(chunk)
-                    sys.stdout.flush()
-                    pieces.append(chunk)
-                print()
-                final_text = "".join(pieces)
             else:
-                final_text = generator.generate(prep.prompt_with_context, config=sampling_cfg, device=device)
-                print(final_text)
+                grounded_prompt = (
+                    f"{prep.prompt_with_context}\n\n"
+                    f"[Reasoning Guidance]:\n{prep.thinking}\n\n"
+                    f"Assistant:"
+                )
+                if stream_output:
+                    prompt_ids = tokenizer.encode(grounded_prompt).ids
+                    pieces = []
+                    for chunk in generator.generate_stream(prompt_ids, config=sampling_cfg, device=device):
+                        sys.stdout.write(chunk)
+                        sys.stdout.flush()
+                        pieces.append(chunk)
+                    print()
+                    raw_text = "".join(pieces)
+                    final_text = OutputOptimizer.optimize(raw_text, thinking_trace=prep.thinking, intent=prep.intent)
+                else:
+                    raw_text = generator.generate(grounded_prompt, config=sampling_cfg, device=device)
+                    final_text = OutputOptimizer.optimize(raw_text, thinking_trace=prep.thinking, intent=prep.intent)
+                    print(final_text)
 
             from ..reasoning.verifier import ResponseVerifier
             verifications = [

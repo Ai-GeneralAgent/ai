@@ -18,6 +18,7 @@ from .monitor import TrainingMonitor
 @dataclass
 class TrainingConfig:
     max_steps: int = 1000
+    max_time_sec: Optional[float] = None
     learning_rate: float = 3e-4
     min_learning_rate: float = 3e-5
     warmup_steps: int = 100
@@ -199,6 +200,11 @@ class Trainer:
 
         try:
             for step in range(self.global_step + 1, self.config.max_steps + 1):
+                if self.config.max_time_sec is not None and (time.time() - started_at) >= self.config.max_time_sec:
+                    elapsed_m = (time.time() - started_at) / 60.0
+                    print(f"\n[TIME BUDGET] Reached target training duration ({self.config.max_time_sec:.0f}s / {elapsed_m:.1f} mins) at step {step-1}. Finishing cleanly...")
+                    break
+
                 self.global_step = step
                 lr = self.scheduler.step(step)
 

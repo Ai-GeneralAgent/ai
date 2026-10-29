@@ -31,6 +31,7 @@ def main():
     parser.add_argument("--block-size", type=int, default=256)
     parser.add_argument("--eval-interval", type=int, default=25)
     parser.add_argument("--run-name", default="modern_production_v2")
+    parser.add_argument("--max-time", type=float, default=None, help="Maximum training duration in seconds (e.g. 1200 for 20 mins)")
     parser.add_argument("--device", default="auto", help="Compute device: auto, cpu, cuda, or mps")
     args = parser.parse_args()
 
@@ -108,6 +109,7 @@ def main():
 
     t_cfg = TrainingConfig(
         max_steps=total_steps,
+        max_time_sec=args.max_time,
         learning_rate=args.lr,
         min_learning_rate=args.lr * 0.1,
         warmup_steps=warmup,
@@ -129,14 +131,15 @@ def main():
 
     # Generate sample output from trained model
     print("\n" + "=" * 60)
-    print("GENERATING SAMPLE FROM TRAINED MODERN MODEL")
+    print("GENERATING SAMPLES FROM TRAINED MODERN MODEL")
     print("=" * 60)
     gen = TextGenerator(model, tokenizer)
     prompts = [
-        "Artificial intelligence is",
-        "The universe is composed of",
+        "In Python, a function is defined as",
+        "The scientific method involves",
+        "Gravity is a fundamental force that",
     ]
-    s_cfg = SamplingConfig(temperature=0.75, top_k=40, top_p=0.9, max_new_tokens=60)
+    s_cfg = SamplingConfig(temperature=0.70, top_k=40, top_p=0.90, repetition_penalty=1.18, max_new_tokens=80)
     for p in prompts:
         out = gen.generate(p, config=s_cfg)
         print(f"\nPrompt: '{p}'")

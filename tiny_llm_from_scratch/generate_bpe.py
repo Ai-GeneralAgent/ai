@@ -29,6 +29,8 @@ def main():
     parser.add_argument("--top-p", type=float, default=0.9)
     parser.add_argument("--repetition-penalty", type=float, default=1.15)
     parser.add_argument("--repeat-last", type=int, default=64)
+    parser.add_argument("--think", action="store_true", default=True, help="Reason step-by-step before generating response")
+    parser.add_argument("--no-think", action="store_false", dest="think", help="Disable reasoning step")
     args = parser.parse_args()
 
     if args.tokens < 0:
@@ -59,7 +61,10 @@ def main():
     # If user passed a directory, resolve to the best checkpoint inside it
     if path.is_dir():
         candidates = [
+            path / "modern_master_20min_best.pt",
+            path / "modern_chat_finetuned.pt",
             path / "modern_production_v2_best.pt",
+            path / "modern_master_v2_10k_base.pt",
             path / "modern_base_v2_best.pt",
             path / "modern_knowledge_v2_best.pt",
             path / "modern_tiny_transformer_best.pt",
@@ -122,7 +127,34 @@ def main():
 
     model.eval()
 
-    prompt_ids = tokenizer.encode(args.prompt).ids
+    # Step 1: Thinking & Reasoning Preparation (Claude/ChatGPT style)
+    direct_answer = None
+    prompt_to_encode = args.prompt
+    if args.think:
+        try:
+            from src.reasoning.orchestrator import ReasoningOrchestrator
+            from src.generation.optimizer import OutputOptimizer
+            orchestrator = ReasoningOrchestrator()
+            prep = orchestrator.prepare_reasoning(args.prompt)
+            if prep.thinking:
+                print("\n╭─ <thinking> ──────────────────────────────────────────")
+                for line in prep.thinking.splitlines():
+                    print(f"│ {line}")
+                print("╰───────────────────────────────────────────────────────\n")
+            if prep.direct_answer:
+                direct_answer = OutputOptimizer.optimize(prep.direct_answer, thinking_trace=prep.thinking, intent=prep.intent)
+            else:
+                prompt_to_encode = f"{args.prompt}\n\n[Reasoning Guidance]:\n{prep.thinking}\n\nAssistant:"
+        except Exception:
+            prompt_to_encode = args.prompt
+
+    if direct_answer:
+        print("\n--- Output (Grounded from Reasoning) ---\n")
+        print(direct_answer)
+        print("\n--- End ---")
+        return
+
+    prompt_ids = tokenizer.encode(prompt_to_encode).ids
     if not prompt_ids:
         raise ValueError("Prompt produced no tokens.")
 
@@ -179,9 +211,16 @@ def main():
             idx = torch.cat([idx, next_token], dim=1)
             generated.append(next_token.item())
 
+    raw_output = tokenizer.decode(generated)
+    try:
+        from src.generation.optimizer import OutputOptimizer
+        final_output = OutputOptimizer.optimize(raw_output)
+    except Exception:
+        final_output = raw_output
+
     print("\n--- Generated text ---\n")
-    print(tokenizer.decode(prompt_ids), end="")
-    print(tokenizer.decode(generated))
+    print(f"Prompt: {args.prompt}\n")
+    print(final_output)
     print("\n--- End ---")
 
 

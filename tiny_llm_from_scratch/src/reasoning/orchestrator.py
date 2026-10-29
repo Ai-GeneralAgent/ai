@@ -75,26 +75,19 @@ class ReasoningOrchestrator:
         ]):
             return "complex-task"
 
+        # Programming / code check
+        if any(k in lower for k in [
+            "```", "print(", "def ", "class ", "python", "code", "bug", "syntax", "function",
+            "import ", "write a script", "algorithm", "javascript", "sql", "execute code", "run this code"
+        ]):
+            return "programming"
+
         # Math / Quantitative / Conversion / Equation check
         if any(k in lower for k in [
             "calculate", "compute", "solve", "sqrt", "equation", "formula",
             "%", "percent", "convert", "miles to", "km to", "celsius", "fahrenheit"
-        ]) or re.search(r"(\d+\s*[\+\-\*\/\^]\s*\d+)", lower) or re.search(r"x\s*[\+\-\*=]", lower):
+        ]) or re.search(r"(\d+\s*[\+\-\*\/\^]\s*\d+)", lower) or re.search(r"\bx\s*[\+\-\*=]", lower):
             return "mathematical"
-
-        # Creative writing / Intuitive analogy check
-        if any(k in lower for k in [
-            "story", "poem", "poetry", "analogy", "metaphor", "creative",
-            "explain like i'm 5", "eli5", "imagine a world", "essay on"
-        ]):
-            return "creative"
-
-        # Programming / code check
-        if any(k in lower for k in [
-            "def ", "class ", "python", "code", "bug", "syntax", "function",
-            "import ", "write a script", "algorithm", "javascript", "sql", "execute code"
-        ]):
-            return "programming"
 
         # Document / Knowledge check
         if any(k in lower for k in [
@@ -129,18 +122,19 @@ class ReasoningOrchestrator:
         complexity = self.estimate_complexity(user_prompt, intent)
 
         thinking_steps = [
-            f"1. Intent Analysis: Identified goal as [{intent}] with complexity [{complexity}].",
+            f"1. Intent Analysis: Identified intent as [{intent}] with [{complexity}] reasoning depth.",
+            f"2. Objective & Invariants: Unpack constraints, isolate core query, and ensure rigorous logic.",
         ]
 
         prep = ReasoningPreparation(intent=intent, complexity=complexity)
 
         # Step-Back Prompting Abstraction (Method #13)
         if complexity == "complex":
-            thinking_steps.append("2. Step-Back Abstraction: Deriving fundamental principles and invariant constraints before detailed execution.")
+            thinking_steps.append("3. Step-Back Abstraction: Deriving fundamental principles and structural invariants before execution.")
 
         # Ambiguity Resolution & Proactive Clarification (Method #15)
         if intent == "ambiguous":
-            thinking_steps.append("2. Ambiguity Detection: Request contains vague or underspecified goal. Triggering proactive clarification options.")
+            thinking_steps.append("3. Ambiguity Detection & Proactive Clarification: Request is underspecified. Proactively offering targeted multi-path workflows.")
             prep.thinking = "\n".join(thinking_steps)
             prep.direct_answer = (
                 "I want to help you with that! Your request is broad, so please choose or specify what you would like to do:\n\n"
@@ -159,14 +153,15 @@ class ReasoningOrchestrator:
             retrieved_context, citations = self.rag.format_context_for_prompt(user_prompt, top_k=2)
             if citations:
                 prep.retrieved_citations = citations
-                thinking_steps.append(f"2. Knowledge Retrieval: Grounded request with {len(citations)} chunks from corpus ({', '.join(citations[:2])}).")
+                thinking_steps.append(f"3. Knowledge Retrieval: Grounded request with {len(citations)} chunks from corpus ({', '.join(citations[:2])}).")
 
         # 2. Mathematical Solving
         if intent == "mathematical":
-            thinking_steps.append("2. Mathematical Formulation: Dispatching to verified Advanced Math & Algebra Solver.")
+            thinking_steps.append("3. Symbolic Formulation: Dispatched to verified Deterministic Algebra & Arithmetic Engine.")
             math_res = solve_math_problem(user_prompt)
             if math_res.get("success"):
-                thinking_steps.append(f"3. Verification: Deterministic solution calculated: {math_res['result']}.")
+                thinking_steps.append(f"4. Solution Derivation: Computed verified exact result: {math_res['result']}.")
+                thinking_steps.append("5. Response Grounding: Synthesizing step-by-step mathematical proof directly from verified deduction.")
                 prep.thinking = "\n".join(thinking_steps)
                 prep.direct_answer = math_res["explanation"]
                 prep.verifications.append({
@@ -180,19 +175,20 @@ class ReasoningOrchestrator:
         if intent == "creative":
             analogy = CreativeEngine.get_intuitive_analogy(user_prompt)
             if analogy:
-                thinking_steps.append("2. Creative Synthesis: Formulating intuitive mental model analogy.")
+                thinking_steps.append("3. Creative Synthesis: Formulating intuitive real-world mental model.")
+                thinking_steps.append("4. Response Grounding: Translating abstract principles into relatable everyday concepts.")
                 prep.thinking = "\n".join(thinking_steps)
                 prep.direct_answer = f"### Intuitive Mental Model\n\n{analogy}\n\n*(Core concept mapped to intuitive everyday intuition)*"
                 return prep
 
         # 4. Code Execution in Sandbox
         if intent == "programming" and any(k in user_prompt.lower() for k in ["run", "execute", "test", "eval"]):
-            # Extract code block if provided
             code_match = re.search(r"```(?:python)?\s*([\s\S]*?)```", user_prompt)
             if code_match:
                 code_to_run = code_match.group(1).strip()
-                thinking_steps.append("2. Code Execution: Evaluating code snippet inside Safe Python Sandbox.")
+                thinking_steps.append("3. Code Execution: Evaluating code snippet inside Safe Python Sandbox.")
                 sandbox_res = SafeCodeSandbox.execute_snippet(code_to_run)
+                thinking_steps.append(f"4. Execution Validation: Sandbox status {'SUCCESS' if sandbox_res['success'] else 'FAILED'}.")
                 prep.thinking = "\n".join(thinking_steps)
                 prep.direct_answer = CodingAssistant.format_solution(
                     task="Sandboxed Code Evaluation",
@@ -211,13 +207,14 @@ class ReasoningOrchestrator:
         if intent == "tool-assisted" and self.tools:
             if "time" in user_prompt.lower() or "date" in user_prompt.lower():
                 res = self.tools.execute("datetime_now", {})
-                thinking_steps.append("2. Environment Tool: Querying real-time system clock.")
+                thinking_steps.append("3. Environment Tool: Querying real-time system clock.")
+                thinking_steps.append(f"4. Tool Result: Clock confirmed {res.get('result')}.")
                 prep.thinking = "\n".join(thinking_steps)
                 prep.direct_answer = f"The current date and time is: **{res.get('result')}**"
                 return prep
 
         # 6. Preparation for generation
-        thinking_steps.append("3. Synthesis: Structuring comprehensive, logical response.")
+        thinking_steps.append("4. Synthesis & Grounding: Structuring direct, coherent response grounded in the logical deduction above.")
         prompt_with_context = user_prompt
         if retrieved_context:
             prompt_with_context = f"Context Information:\n{retrieved_context}\n\nTask / Question:\n{user_prompt}"
