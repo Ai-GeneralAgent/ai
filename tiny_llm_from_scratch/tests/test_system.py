@@ -398,6 +398,75 @@ class TestModernLLMSystem(unittest.TestCase):
         self.assertIsNotNone(analogy)
         self.assertIn("spinning coin", analogy)
 
+    # 32. Instruction Dataset with Completion Loss Masking & ChatML
+    def test_32_instruction_dataset_chatml(self):
+        import json
+        ds_file = self.tmp_dir / "test_chat.jsonl"
+        with ds_file.open("w", encoding="utf-8") as f:
+            f.write(json.dumps({
+                "messages": [
+                    {"role": "user", "content": "What is Python?"},
+                    {"role": "assistant", "content": "Python is a high-level language."}
+                ]
+            }) + "\n")
+        dataset = InstructionDataset(ds_file, self.tokenizer, block_size=64)
+        self.assertEqual(len(dataset), 1)
+        x, y = dataset.sample_batch(1)
+        self.assertEqual(x.size(0), 1)
+        # Check that -100 mask is applied to prompt tokens
+        self.assertIn(-100, y.tolist()[0])
+
+    # 33. Direct Preference Optimization (DPO) Loss
+    def test_33_dpo_preference_loss(self):
+        import json
+        from src.training.dpo import DPODataset, dpo_loss
+        dpo_file = self.tmp_dir / "test_dpo.jsonl"
+        with dpo_file.open("w", encoding="utf-8") as f:
+            f.write(json.dumps({
+                "prompt": "What is 2+2?",
+                "chosen": "2+2 equals 4.",
+                "rejected": "2+2 equals 5."
+            }) + "\n")
+        dpo_ds = DPODataset(dpo_file, self.tokenizer, block_size=64)
+        self.assertEqual(len(dpo_ds), 1)
+        batch = dpo_ds.sample_batch(1)
+        self.assertIn("chosen_x", batch)
+        self.assertIn("rejected_x", batch)
+
+        # Compute DPO loss with synthetic logprobs
+        pi_c = torch.tensor([-1.2])
+        pi_r = torch.tensor([-3.4])
+        ref_c = torch.tensor([-1.5])
+        ref_r = torch.tensor([-2.0])
+        loss, r_c, r_r = dpo_loss(pi_c, pi_r, ref_c, ref_r, beta=0.1)
+        self.assertGreater(loss.item(), 0.0)
+
+    # 34. Constitutional AI Critique & Self-Correction
+    def test_34_constitutional_ai_critique(self):
+        # Clean answer passes
+        passed, summary, _ = ResponseVerifier.critique_and_self_correct(
+            prompt="Explain gravity",
+            response="Gravity is an attractive force between objects with mass."
+        )
+        self.assertTrue(passed)
+
+        # Dangerous code call fails
+        passed_bad, summary_bad, recs = ResponseVerifier.critique_and_self_correct(
+            prompt="Delete files",
+            response="Run os.system('rm -rf /')"
+        )
+        self.assertFalse(passed_bad)
+        self.assertIn("os.system", summary_bad)
+
+    # 35. Ambiguity Resolution & Proactive Clarification
+    def test_35_ambiguity_resolution(self):
+        orch = ReasoningOrchestrator()
+        prep = orch.prepare_reasoning("help me fix")
+        self.assertEqual(prep.intent, "ambiguous")
+        self.assertIn("proactive clarification", prep.thinking.lower())
+        self.assertIsNotNone(prep.direct_answer)
+        self.assertIn("What specific topic", prep.direct_answer)
+
 
 if __name__ == "__main__":
     unittest.main()

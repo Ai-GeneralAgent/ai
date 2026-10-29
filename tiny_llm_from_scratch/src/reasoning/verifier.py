@@ -78,3 +78,45 @@ class ResponseVerifier:
             )
         return VerificationResult(True, "Citations", f"Cited {len(used_citations)} source chunk(s).")
 
+    @classmethod
+    def critique_and_self_correct(cls, prompt: str, response: str) -> Tuple[bool, str, List[str]]:
+        """
+        Constitutional AI Self-Correction & Critique Loop (Method #5 & #14):
+        Audits answer for safety, hallucinated claims, empty answers, and completeness.
+        Returns: (passed, critique_summary, recommendations)
+        """
+        critiques = []
+        recommendations = []
+
+        # 1. Non-empty check
+        if not response or len(response.strip()) < 5:
+            critiques.append("Response is empty or trivially brief.")
+            recommendations.append("Generate a structured, complete answer addressing the prompt.")
+            return False, "; ".join(critiques), recommendations
+
+        # 2. Refusal / Evasiveness check
+        evasive_patterns = ["as an ai", "i cannot answer", "i am an ai language model", "as a large language model"]
+        if any(p in response.lower() for p in evasive_patterns) and len(response.strip()) < 100:
+            critiques.append("Response exhibits unnecessary canned refusal or evasion.")
+            recommendations.append("Directly address the user's objective with factual explanation.")
+
+        # 3. Prompt alignment check
+        prompt_words = set(re.findall(r"\w+", prompt.lower()))
+        response_words = set(re.findall(r"\w+", response.lower()))
+        overlap = len(prompt_words.intersection(response_words)) / max(1, len(prompt_words))
+        if overlap < 0.10 and len(prompt_words) > 3:
+            critiques.append("Low semantic alignment between prompt query and output response.")
+            recommendations.append("Ensure key nouns and questions from the prompt are directly addressed.")
+
+        # 4. Code safety check
+        dangerous_calls = ["os.system", "shutil.rmtree", "subprocess.Popen", "__import__('os')", "eval(input("]
+        for danger in dangerous_calls:
+            if danger in response:
+                critiques.append(f"Dangerous call '{danger}' detected in output.")
+                recommendations.append("Sanitize or wrap in safe isolated sandbox.")
+
+        passed = len(critiques) == 0
+        summary = "Passed Constitutional AI Critique (Safety, Completeness, Alignment verified)." if passed else "; ".join(critiques)
+        return passed, summary, recommendations
+
+

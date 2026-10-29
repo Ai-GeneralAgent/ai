@@ -202,3 +202,4 @@ class CurriculumStudyEngine:
             "flashcards_path": str(jsonl_file),
             "rag_chunks_indexed": indexed_chunks,
         }
+

@@ -107,6 +107,11 @@ class ReasoningOrchestrator:
         if any(k in lower for k in ["what time", "what date", "current time", "today"]):
             return "tool-assisted"
 
+        # Ambiguity check (Method #15: Ambiguity Resolution & Proactive Clarification)
+        words = lower.split()
+        if len(words) <= 3 and any(k in lower for k in ["help", "fix", "do it", "solve", "how", "why", "what", "make it"]):
+            return "ambiguous"
+
         return "general"
 
     def estimate_complexity(self, prompt: str, intent: str) -> str:
@@ -128,6 +133,25 @@ class ReasoningOrchestrator:
         ]
 
         prep = ReasoningPreparation(intent=intent, complexity=complexity)
+
+        # Step-Back Prompting Abstraction (Method #13)
+        if complexity == "complex":
+            thinking_steps.append("2. Step-Back Abstraction: Deriving fundamental principles and invariant constraints before detailed execution.")
+
+        # Ambiguity Resolution & Proactive Clarification (Method #15)
+        if intent == "ambiguous":
+            thinking_steps.append("2. Ambiguity Detection: Request contains vague or underspecified goal. Triggering proactive clarification options.")
+            prep.thinking = "\n".join(thinking_steps)
+            prep.direct_answer = (
+                "I want to help you with that! Your request is broad, so please choose or specify what you would like to do:\n\n"
+                "1. **Solve Math / Equation**: e.g., `Solve: 5x - 15 = 35` or `What is 25% of 400?`\n"
+                "2. **Run Python Code**: e.g., `/code print([x**2 for x in range(5)])`\n"
+                "3. **Study Textbooks (Grades 1-12)**: e.g., `/study data_curriculum/grade_10/science.txt grade_10`\n"
+                "4. **Creative Mental Models**: e.g., `/creative quantum mechanics` or `/creative neural networks`\n"
+                "5. **Knowledge Search (RAG)**: Ask any factual question from the corpus.\n\n"
+                "What specific topic or problem should we work on?"
+            )
+            return prep
 
         # 1. RAG Knowledge Retrieval
         retrieved_context = ""
@@ -240,6 +264,14 @@ class ReasoningOrchestrator:
         if prep.retrieved_citations:
             cite_check = ResponseVerifier.verify_citations(final_text, prep.retrieved_citations)
             summary.verifications.append(cite_check.to_dict())
+
+        # Constitutional AI Critique & Self-Correction (Method #5 & #14)
+        c_passed, c_summary, _ = ResponseVerifier.critique_and_self_correct(user_prompt, final_text)
+        summary.verifications.append({
+            "check": "Constitutional Self-Correction",
+            "passed": c_passed,
+            "details": c_summary,
+        })
 
         summary.final_answer = final_text
         return summary

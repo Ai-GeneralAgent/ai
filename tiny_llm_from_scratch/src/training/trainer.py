@@ -176,6 +176,7 @@ class Trainer:
         tokens_seen = 0
 
         print(f"Training starting at step {self.global_step + 1}...")
+        rolling_loss: Optional[float] = None
 
         try:
             for step in range(self.global_step + 1, self.config.max_steps + 1):
@@ -185,21 +186,44 @@ class Trainer:
                 # Gradient accumulation
                 self.optimizer.zero_grad(set_to_none=True)
                 accum_loss = 0.0
+                skip_step = False
 
                 for _ in range(self.config.grad_accum_steps):
                     x, y = self.cache.sample_batch(
                         self.train_start, self.train_end, self.config.batch_size, block_size, self.config.device
                     )
                     _, loss = self.model(x, y)
+                    loss_item = loss.item()
+
+                    # Numerical instability / NaN guard (Problem #1 & #6)
+                    if math.isnan(loss_item) or math.isinf(loss_item):
+                        print(f"  [SPIKE GUARD] Numerical NaN/Inf encountered at step {step}. Skipping step.")
+                        skip_step = True
+                        break
+
                     loss = loss / self.config.grad_accum_steps
                     loss.backward()
                     accum_loss += loss.item()
                     tokens_seen += x.numel()
 
-                if self.config.clip_grad_norm > 0:
-                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.clip_grad_norm)
+                if skip_step:
+                    self.optimizer.zero_grad(set_to_none=True)
+                    continue
+
+                # Loss Spike Detection (Problem #1)
+                if rolling_loss is not None and accum_loss > 3.0 * rolling_loss and step > 10:
+                    print(f"  [LOSS SPIKE GUARD] Sudden loss explosion ({accum_loss:.4f} vs rolling {rolling_loss:.4f}) at step {step}. Clamping update.")
+                    # Clamp gradients more aggressively
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), 0.25)
+                elif self.config.clip_grad_norm > 0:
+                    grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.clip_grad_norm)
+                    if math.isnan(grad_norm) or math.isinf(grad_norm):
+                        print(f"  [GRAD SPIKE GUARD] NaN gradient norm at step {step}. Skipping step.")
+                        self.optimizer.zero_grad(set_to_none=True)
+                        continue
 
                 self.optimizer.step()
+                rolling_loss = accum_loss if rolling_loss is None else (0.95 * rolling_loss + 0.05 * accum_loss)
 
                 # Step metrics
                 step_elapsed = max(time.time() - step_timer, 0.001)

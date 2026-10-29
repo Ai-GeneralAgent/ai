@@ -160,3 +160,4 @@ class CodingAssistant:
             lines.append(f"\n*Warning: Sandbox check returned: {sandbox_result.get('error')}*")
 
         return "\n".join(lines)
+

@@ -178,6 +178,55 @@ python tiny_llm_from_scratch/tests/test_system.py
 
 ---
 
+## 🧠 15 Real-Life Problems Solved (Industry LLM Training Failures)
+
+Leading AI companies (OpenAI, Anthropic, Meta, DeepMind) face severe engineering and mathematical hurdles during training. This repository implements concrete architectural protections:
+
+| # | Real-World Problem | Root Cause in LLM Training | Engineered Solution in Code |
+|---|---|---|---|
+| **1** | **Loss Spikes & Gradient Explosion** | Sudden runaway attention updates that corrupt weights into `NaN`. | **Rolling Loss Spike Guard & $L_2$ Norm Clipping ($\le 1.0$)**: Clamps updates or rejects corrupt steps before weights poison. |
+| **2** | **Catastrophic Forgetting** | SFT overwrites base reasoning and vocabulary when learning chat formats. | **Experience Replay Buffer**: Blends 20% base pretraining corpus tokens with instruction batches. |
+| **3** | **Data Contamination & Loops** | Scraped web repetitions ("cookie banner", duplicate text) cause repeating output loops. | **4-Gram & Paragraph Repetition Filter**: Drops documents with redundancy $>40\%$ in `src/data/pipeline.py`. |
+| **4** | **Learning Rate Instability** | Early divergence before Adam momentum vectors settle. | **Cosine Warmup Scheduler with Min LR Floor**: Linear ramp-up over 100+ steps followed by cosine decay to $0.1 \times \text{LR}$. |
+| **5** | **Memory OOM on Long Context** | $O(N^2)$ attention memory growth crashes hardware. | **Gradient Accumulation & Zero-RAM Memmap**: Simulates large effective batch sizes with bounded memory. |
+| **6** | **Numerical Underflow / Overflow** | Subnormal numbers in FP16 RMSNorm and Softmax. | **Safe Softmax Clamping & FP32 Accumulators**: Subtracts max logit before exponentiation; $10^{-6}$ epsilon in RMSNorm. |
+| **7** | **Prompt-Response Loss Misattribution** | Computing cross-entropy over user questions teaches LLMs to memorize prompts instead of answering. | **Completion-Only Loss Masking**: Masks user prompts with target index `-100`, computing loss strictly on assistant replies. |
+| **8** | **Tokenizer Out-of-Vocab Bloat** | Splitting unknown words and numbers into dozens of single characters. | **Byte-Level BPE with Special Delimiters**: Fallback to raw bytes with isolated digit regex and `<|im_start|>`, `<|im_end|>`. |
+| **9** | **Exposure Bias & Hallucination Drift** | Teacher forcing hides errors during training, leading to compound hallucinations at runtime. | **Grounding RAG Pipeline with Citation Verification**: Retrieves and verifies verified evidence from the knowledge corpus. |
+| **10** | **Attention Quadratic Bottleneck** | Absolute positional embeddings fail beyond training sequence length. | **RoPE (Rotary Position Embeddings) Extrapolation**: Frequency scaling allowing context expansion to 1,024+ tokens. |
+| **11** | **Improper Weight Decay on Norms** | Applying weight decay to 1D biases and RMSNorm gains causes under-scaling. | **Decoupled Parameter Groups**: Decay applied strictly to $\ge 2$D projection matrices; 0.0 weight decay on 1D normalization vectors. |
+| **12** | **Alignment Mode Collapse (RLHF)** | Preference tuning collapses output diversity into repetitive sycophancy. | **Direct Preference Optimization (DPO)**: Closed-form pairwise loss ($\beta=0.1$) with reference model KL constraint. |
+| **13** | **Checkpoint Corruption** | System crashes or power loss during `torch.save` corrupts checkpoints. | **Atomic Temporary Writes**: Writes to `.tmp` first, then executes atomic `replace()` with SHA-256 fingerprinting. |
+| **14** | **Overfitting & Validation Stagnation** | Model over-memorizes training text while generalization degrades. | **Early Stopping Monitor**: Tracks validation perplexity with configurable patience and rollback to best checkpoint. |
+| **15** | **OpenBLAS CPU Thread Starvation** | Unbounded OpenBLAS threads crash with "Memory allocation failed after 10 retries" on Windows. | **Thread Pool Clamping**: Caps CPU thread pooling (`OPENBLAS_NUM_THREADS=4`, `OMP_NUM_THREADS=4`) before importing Torch. |
+
+---
+
+## 🎯 20 Methods & Techniques Used by AI Companies to Make LLMs Smarter
+
+1. **ChatML / Unified Conversational Turn Formatting**: Isolates `<|im_start|>user` and `<|im_start|>assistant` roles.
+2. **Completion-Only Loss Masking (SFT)**: Only trains the model to generate the response, ignoring user prompt tokens.
+3. **Direct Preference Optimization (DPO)**: Pairwise preference optimization $(x, y_w, y_l)$ without fragile reward models.
+4. **Explicit Chain-of-Thought (CoT)**: Structured `<thinking>` scratchpad trace for problem decomposition.
+5. **Constitutional AI Critique & Reflection**: Post-generation auditing checking for safety, completeness, and hallucinations.
+6. **Intent Classification & Goal Parsing**: Deterministic classification (Coding, Math, Factual RAG, Creative, Curriculum, Ambiguous).
+7. **System Prompt Steering & Persona Calibration**: Dynamic role adaptation (Mathematician, Senior Software Engineer, Tutor).
+8. **ReAct Tool-Calling Agent Loop**: Autonomous reasoning-action-observation cycle dispatching tools.
+9. **RAG (Retrieval-Augmented Generation)**: BM25/Dense semantic indexing grounding answers with verified corpus citations.
+10. **Dynamic In-Context Exemplar Selection**: Retrieves relevant few-shot demonstrations on the fly.
+11. **Context Window Memory Compaction**: Summarizes multi-turn dialogue history to avoid context truncation.
+12. **Self-Consistency Sampling**: Generates multiple reasoning candidates at $T>0$ and takes majority consensus.
+13. **Step-Back Prompting**: Derives governing physical laws or mathematical abstractions before detailed tactical execution.
+14. **Safety & Guardrail Sanitization**: Blocks prompt injection, unauthorized system commands, and code vulnerabilities.
+15. **Decoupled Weight Decay (AdamW)**: $L_2$ regularization restricted to 2D weight matrices.
+16. **Cosine Annealing with Warmup**: Optimal learning rate schedule with minimum floor.
+17. **Global Gradient Norm Clipping**: Constrains gradient updates to unit norm $\le 1.0$.
+18. **Key-Value (KV) Caching**: Caches previous keys and values for $O(1)$ constant-time autoregressive streaming.
+19. **RoPE Context Extrapolation**: Extends context window smoothly beyond the training sequence length.
+20. **Curriculum Learning & Staged Training**: Stages foundational skills (Grades 1-4) $\to$ High School (Grades 5-10) $\to$ Advanced Multi-Step Reasoning (Grades 11-12).
+
+---
+
 ## 📁 Repository Structure
 
 ```

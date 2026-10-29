@@ -69,16 +69,39 @@ class CorpusPipeline:
         return text.strip()
 
     def check_quality(self, text: str) -> Tuple[bool, Optional[str]]:
-        """Checks text quality. Flags empty, repetitive, or corrupt documents."""
-        if len(text.strip()) < 50:
+        """
+        Industry Data Quality Guard (Problem #3 Solution):
+        - Minimum length threshold
+        - Unique word ratio check
+        - 4-gram repetition loop filter (prevents models learning infinite loops)
+        - Paragraph duplication filter
+        """
+        stripped = text.strip()
+        if len(stripped) < 50:
             return False, "Too short (<50 characters)"
 
-        # Check for excessive repetition (e.g. same 20-char substring repeated 50 times)
-        sample = text[:1000]
-        if len(sample) > 100:
-            words = sample.split()
-            if len(words) > 10 and len(set(words)) / len(words) < 0.15:
-                return False, "Excessive word repetition"
+        # Check for word diversity
+        words = stripped.split()
+        if len(words) >= 20:
+            unique_ratio = len(set(words)) / len(words)
+            if unique_ratio < 0.20:
+                return False, f"Excessive word repetition (diversity {unique_ratio:.2f} < 0.20)"
+
+        # 4-gram repetition loop filter
+        if len(words) >= 30:
+            four_grams = [tuple(words[i : i + 4]) for i in range(len(words) - 3)]
+            if four_grams:
+                unique_4grams = len(set(four_grams))
+                repetition_ratio = 1.0 - (unique_4grams / len(four_grams))
+                if repetition_ratio > 0.40:
+                    return False, f"Degenerate 4-gram repetition loops (ratio {repetition_ratio:.2f} > 0.40)"
+
+        # Check for duplicate paragraphs in document
+        paragraphs = [p.strip() for p in stripped.split("\n\n") if len(p.strip()) > 30]
+        if len(paragraphs) >= 5:
+            dup_ratio = 1.0 - (len(set(paragraphs)) / len(paragraphs))
+            if dup_ratio > 0.35:
+                return False, f"Excessive duplicate paragraphs ({dup_ratio:.2f} > 0.35)"
 
         return True, None
 

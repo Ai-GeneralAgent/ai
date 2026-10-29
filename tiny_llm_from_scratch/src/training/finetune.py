@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Tuple, Union
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -8,16 +8,31 @@ from tokenizers import Tokenizer
 
 from ..models.transformer import ModernTransformer
 from ..models.checkpoint import save_checkpoint
+from ..data.token_cache import CompactTokenCache
 
 
 class InstructionDataset:
-    """Prepares prompt-response pairs with prompt loss masking (-100)."""
+    """
+    Industrial SFT Dataset with:
+    - Multi-turn & single-turn ChatML / OpenAI message format parsing
+    - Completion-only loss masking (-100 for user prompts and system context)
+    - Experience Replay support to prevent catastrophic forgetting
+    """
 
     TEMPLATE = "### User:\n{instruction}\n\n### Assistant:\n{response}"
 
-    def __init__(self, jsonl_path: Union[str, Path], tokenizer: Tokenizer, block_size: int = 256):
+    def __init__(
+        self,
+        jsonl_path: Union[str, Path],
+        tokenizer: Tokenizer,
+        block_size: int = 256,
+        replay_cache: Optional[CompactTokenCache] = None,
+        replay_ratio: float = 0.20,
+    ):
         self.tokenizer = tokenizer
         self.block_size = block_size
+        self.replay_cache = replay_cache
+        self.replay_ratio = replay_ratio
         self.examples: List[Tuple[torch.Tensor, torch.Tensor]] = []
 
         path = Path(jsonl_path)
@@ -30,15 +45,36 @@ class InstructionDataset:
                     continue
                 try:
                     obj = json.loads(line)
-                    inst = obj.get("instruction") or obj.get("prompt")
-                    resp = obj.get("response") or obj.get("output") or obj.get("answer")
+                    # 1. Check for standard OpenAI/Anthropic "messages" format
+                    if "messages" in obj and isinstance(obj["messages"], list):
+                        msgs = obj["messages"]
+                        system_prompt = ""
+                        user_prompt = ""
+                        assistant_response = ""
+                        for m in msgs:
+                            role = m.get("role", "")
+                            content = m.get("content", "")
+                            if role == "system":
+                                system_prompt = content
+                            elif role == "user":
+                                user_prompt = content
+                            elif role == "assistant":
+                                assistant_response = content
+                        if user_prompt and assistant_response:
+                            self._process_pair(user_prompt, assistant_response, system_prompt=system_prompt)
+                            continue
+
+                    # 2. Check for standard instruction / response format
+                    inst = obj.get("instruction") or obj.get("prompt") or obj.get("question")
+                    resp = obj.get("response") or obj.get("output") or obj.get("answer") or obj.get("completion")
                     if inst and resp:
-                        self._process_pair(inst, resp)
+                        self._process_pair(str(inst), str(resp))
                 except Exception:
                     continue
 
-    def _process_pair(self, instruction: str, response: str):
-        prompt_str = f"### User:\n{instruction}\n\n### Assistant:\n"
+    def _process_pair(self, instruction: str, response: str, system_prompt: str = ""):
+        prefix = f"<|im_start|>system\n{system_prompt}<|im_end|>\n" if system_prompt else ""
+        prompt_str = f"{prefix}### User:\n{instruction}\n\n### Assistant:\n"
         full_str = f"{prompt_str}{response}\n"
 
         prompt_ids = self.tokenizer.encode(prompt_str).ids
@@ -50,7 +86,7 @@ class InstructionDataset:
         x_ids = full_ids[:-1]
         y_ids = full_ids[1:]
 
-        # Create target tensor with -100 for prompt tokens
+        # Create target tensor with -100 for prompt tokens (Prompt Loss Masking)
         prompt_len = min(len(prompt_ids) - 1, len(y_ids))
         targets = list(y_ids)
         for i in range(prompt_len):
@@ -64,21 +100,52 @@ class InstructionDataset:
         return len(self.examples)
 
     def sample_batch(self, batch_size: int, device: str = "cpu") -> Tuple[torch.Tensor, torch.Tensor]:
-        indices = torch.randint(0, len(self.examples), (batch_size,))
+        """Samples a batch with optional base corpus experience replay to prevent forgetting."""
+        # Check if experience replay from base corpus is active
+        replay_count = 0
+        if self.replay_cache and self.replay_ratio > 0:
+            replay_count = max(1, int(batch_size * self.replay_ratio))
+
+        sft_count = batch_size - replay_count
         batch_x = []
         batch_y = []
-        max_len = max(self.examples[i][0].size(0) for i in indices)
 
-        for i in indices:
-            x, y = self.examples[i]
-            pad_len = max_len - x.size(0)
-            if pad_len > 0:
-                x = F.pad(x, (0, pad_len), value=0)
-                y = F.pad(y, (0, pad_len), value=-100)
-            batch_x.append(x)
-            batch_y.append(y)
+        if sft_count > 0 and len(self.examples) > 0:
+            indices = torch.randint(0, len(self.examples), (sft_count,))
+            max_len = max(self.examples[i][0].size(0) for i in indices)
 
-        return torch.stack(batch_x).to(device), torch.stack(batch_y).to(device)
+            for i in indices:
+                x, y = self.examples[i]
+                pad_len = max_len - x.size(0)
+                if pad_len > 0:
+                    x = F.pad(x, (0, pad_len), value=0)
+                    y = F.pad(y, (0, pad_len), value=-100)
+                batch_x.append(x)
+                batch_y.append(y)
+
+        # Experience replay rows from pretraining corpus (normal next-token prediction)
+        if replay_count > 0 and self.replay_cache:
+            rx, ry = self.replay_cache.sample_batch(
+                0, self.replay_cache.token_count, replay_count, self.block_size, device="cpu"
+            )
+            for i in range(replay_count):
+                batch_x.append(rx[i])
+                batch_y.append(ry[i])
+
+        # Align lengths if needed
+        max_b_len = max(t.size(0) for t in batch_x)
+        final_x = []
+        final_y = []
+        for x, y in zip(batch_x, batch_y):
+            pad = max_b_len - x.size(0)
+            if pad > 0:
+                final_x.append(F.pad(x, (0, pad), value=0))
+                final_y.append(F.pad(y, (0, pad), value=-100))
+            else:
+                final_x.append(x)
+                final_y.append(y)
+
+        return torch.stack(final_x).to(device), torch.stack(final_y).to(device)
 
 
 def finetune_instructions(
@@ -90,28 +157,65 @@ def finetune_instructions(
     batch_size: int = 4,
     device: str = "cpu",
     output_checkpoint: str = "checkpoints/modern_chat_finetuned.pt",
+    replay_cache: Optional[CompactTokenCache] = None,
+    replay_ratio: float = 0.20,
 ) -> ModernTransformer:
-    """Supervised fine-tuning loop with prompt loss masking."""
+    """
+    Industrial Supervised Fine-Tuning (SFT) Loop with:
+    - Completion-only loss masking (-100 for prompt tokens)
+    - Anti-catastrophic forgetting via replay buffer blending
+    - Global gradient norm clipping (1.0)
+    - Loss spike and NaN/Inf guards
+    """
     model.train()
-    dataset = InstructionDataset(dataset_path, tokenizer, block_size=model.config.block_size)
+    dataset = InstructionDataset(
+        dataset_path,
+        tokenizer,
+        block_size=model.config.block_size,
+        replay_cache=replay_cache,
+        replay_ratio=replay_ratio,
+    )
     if len(dataset) == 0:
         raise ValueError(f"No valid instruction pairs found in {dataset_path}")
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=0.01)
-    print(f"Finetuning model on {len(dataset)} instruction pairs for {steps} steps...")
+    # Decouple weight decay: 2D weights get decay, 1D layer norms & biases get 0.0
+    decay_params = [p for p in model.parameters() if p.requires_grad and p.dim() >= 2]
+    nodecay_params = [p for p in model.parameters() if p.requires_grad and p.dim() < 2]
+    optim_groups = [
+        {"params": decay_params, "weight_decay": 0.01},
+        {"params": nodecay_params, "weight_decay": 0.0},
+    ]
+    optimizer = torch.optim.AdamW(optim_groups, lr=lr, betas=(0.9, 0.95), eps=1e-8)
 
+    print(f"Finetuning model on {len(dataset)} instruction pairs for {steps} steps (Replay ratio: {replay_ratio*100:.0f}%)...")
+
+    rolling_loss = None
     for step in range(1, steps + 1):
         x, y = dataset.sample_batch(batch_size, device=device)
         logits, _ = model(x)
         loss = F.cross_entropy(logits.view(-1, logits.size(-1)), y.view(-1), ignore_index=-100)
 
-        optimizer.zero_grad()
+        # Numerical stability & Loss spike protection
+        loss_val = loss.item()
+        if torch.isnan(loss) or torch.isinf(loss):
+            print(f"  [WARNING] NaN/Inf loss encountered at step {step}. Skipping step.")
+            optimizer.zero_grad(set_to_none=True)
+            continue
+
+        if rolling_loss is not None and loss_val > 3.0 * rolling_loss:
+            print(f"  [SPIKE GUARD] Loss spike ({loss_val:.4f} vs rolling {rolling_loss:.4f}) at step {step}. Skipping step.")
+            optimizer.zero_grad(set_to_none=True)
+            continue
+
+        rolling_loss = loss_val if rolling_loss is None else 0.9 * rolling_loss + 0.1 * loss_val
+
+        optimizer.zero_grad(set_to_none=True)
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         optimizer.step()
 
         if step % 25 == 0 or step == steps:
-            print(f"Finetune Step {step:3d}/{steps} | Loss: {loss.item():.4f}")
+            print(f"Finetune Step {step:3d}/{steps} | Loss: {loss.item():.4f} (Rolling: {rolling_loss:.4f})")
 
     save_checkpoint(model, output_checkpoint, step=steps, val_loss=loss.item())
     print(f"Finetuned checkpoint saved to {output_checkpoint}")
