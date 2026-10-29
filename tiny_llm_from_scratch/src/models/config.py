@@ -21,10 +21,14 @@ class ModelConfig:
     tie_weights: bool = True
     init_std: float = 0.02
     rope_theta: float = 10000.0
-    max_seq_len: int = 1024          # Dynamic extended context window limit
-    rope_scaling_factor: float = 1.0 # RoPE linear frequency scaling factor
-    use_kv_cache: bool = True        # Fast O(1) inference with Key-Value Cache
-    arch_version: str = "2.1.0"
+    max_seq_len: int = 1_048_576          # 1M token extended context window limit (1,048,576 tokens)
+    rope_scaling_type: str = "yarn"       # "yarn", "dynamic_ntk", or "linear"
+    rope_scaling_factor: float = 1.0      # RoPE frequency scaling factor
+    sliding_window: Optional[int] = None  # Optional sliding window size for StreamingLLM
+    sink_tokens: int = 4                  # Attention sink token count (Xiao et al., 2023)
+    chunk_size: int = 512                 # Chunked prefill size for ultra-long context
+    use_kv_cache: bool = True             # Fast O(1) inference with Key-Value Cache
+    arch_version: str = "2.2.0"
 
     def __post_init__(self):
         if self.n_embd % self.n_head != 0:
@@ -93,5 +97,28 @@ class ModelConfig:
             pos_emb="rope",
             ffn_type="swiglu",
             tie_weights=True,
+        )
+
+    @classmethod
+    def preset_1m(cls, vocab_size: int = 10000) -> "ModelConfig":
+        """Configuration tuned for ultra-long 1,048,576 (1M) context with YaRN RoPE."""
+        return cls(
+            vocab_size=vocab_size,
+            block_size=256,
+            max_seq_len=1_048_576,
+            n_embd=192,
+            n_head=4,
+            n_layer=3,
+            norm_type="rmsnorm",
+            pos_emb="rope",
+            ffn_type="swiglu",
+            rope_scaling_type="yarn",
+            rope_theta=1_000_000.0,
+            rope_scaling_factor=4096.0,
+            sliding_window=4096,
+            sink_tokens=4,
+            chunk_size=512,
+            tie_weights=True,
+            arch_version="2.2.0",
         )
 

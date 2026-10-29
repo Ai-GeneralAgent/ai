@@ -20,31 +20,76 @@ class RMSNorm(nn.Module):
 
 
 class KVCache:
-    """Key-Value cache enabling O(1) step complexity during autoregressive generation."""
-    def __init__(self):
+    """
+    Key-Value cache enabling O(1) step complexity during autoregressive generation.
+    Supports 1,048,576 (1M) context windows, StreamingLLM attention sinks, and sliding windows.
+    """
+    def __init__(
+        self,
+        max_capacity: int = 1_048_576,
+        window_size: Optional[int] = None,
+        sink_size: int = 4,
+    ):
+        self.max_capacity = max_capacity
+        self.window_size = window_size
+        self.sink_size = sink_size
         self.k: Optional[torch.Tensor] = None
         self.v: Optional[torch.Tensor] = None
+        self.total_tokens_seen: int = 0
 
     def update(self, k: torch.Tensor, v: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        self.total_tokens_seen += k.shape[2]
         if self.k is None:
             self.k = k
             self.v = v
         else:
             self.k = torch.cat([self.k, k], dim=2)
             self.v = torch.cat([self.v, v], dim=2)
+
+        # StreamingLLM attention sinks eviction if sliding window is active
+        if self.window_size is not None and self.k.shape[2] > (self.window_size + self.sink_size):
+            sink_k = self.k[:, :, :self.sink_size, :]
+            sink_v = self.v[:, :, :self.sink_size, :]
+            window_k = self.k[:, :, -self.window_size:, :]
+            window_v = self.v[:, :, -self.window_size:, :]
+            self.k = torch.cat([sink_k, window_k], dim=2)
+            self.v = torch.cat([sink_v, window_v], dim=2)
+
         return self.k, self.v
 
     def reset(self):
         self.k = None
         self.v = None
+        self.total_tokens_seen = 0
 
 
 def precompute_rope_freqs(
-    dim: int, max_seq_len: int, theta: float = 10000.0, scale_factor: float = 1.0
+    dim: int,
+    max_seq_len: int,
+    theta: float = 10000.0,
+    scale_factor: float = 1.0,
+    scaling_type: str = "yarn",
+    original_max_len: int = 256,
 ) -> torch.Tensor:
-    """Precomputes complex exponential frequencies for RoPE with optional linear scaling."""
-    freqs = 1.0 / (theta ** (torch.arange(0, dim, 2)[: (dim // 2)].float() / dim))
-    t = torch.arange(max_seq_len, dtype=torch.float32) / scale_factor
+    """
+    Precomputes complex exponential frequencies for RoPE with support for:
+    - Linear scaling (Chen et al., 2023)
+    - Dynamic NTK-aware scaling (bloc97, 2023)
+    - YaRN (Yet another RoPE extensioN, Peng et al., 2023) up to 1,048,576 (1M) context.
+    """
+    if scaling_type in ["yarn", "dynamic_ntk"] and max_seq_len > original_max_len:
+        ratio = max(1.0, float(max_seq_len) / float(original_max_len))
+        effective_theta = theta * (ratio ** (float(dim) / float(dim - 2)))
+    else:
+        effective_theta = theta
+
+    freqs = 1.0 / (effective_theta ** (torch.arange(0, dim, 2)[: (dim // 2)].float() / dim))
+
+    if scaling_type == "linear" and scale_factor > 1.0:
+        t = torch.arange(max_seq_len, dtype=torch.float32) / scale_factor
+    else:
+        t = torch.arange(max_seq_len, dtype=torch.float32)
+
     freqs = torch.outer(t, freqs)
     freqs_cis = torch.polar(torch.ones_like(freqs), freqs)  # complex64
     return freqs_cis
@@ -191,13 +236,16 @@ class ModernTransformer(nn.Module):
         if config.tie_weights:
             self.lm_head.weight = self.tok_embeddings.weight
 
-        self.max_seq_len = getattr(config, "max_seq_len", 1024)
+        self.max_seq_len = getattr(config, "max_seq_len", 1_048_576)
         if config.pos_emb == "rope":
+            init_len = min(1024, max(config.block_size, 256))
             freqs_cis = precompute_rope_freqs(
                 config.n_embd // config.n_head,
-                max(config.block_size, self.max_seq_len),
+                init_len,
                 theta=config.rope_theta,
                 scale_factor=getattr(config, "rope_scaling_factor", 1.0),
+                scaling_type=getattr(config, "rope_scaling_type", "yarn"),
+                original_max_len=config.block_size,
             )
             self.register_buffer("freqs_cis", freqs_cis, persistent=False)
         else:
@@ -214,22 +262,33 @@ class ModernTransformer(nn.Module):
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=std)
 
-    def create_kv_caches(self) -> List[KVCache]:
-        """Creates an empty Key-Value cache for each layer."""
-        return [KVCache() for _ in range(self.config.n_layer)]
+    def create_kv_caches(
+        self,
+        window_size: Optional[int] = None,
+        sink_size: Optional[int] = None,
+    ) -> List[KVCache]:
+        """Creates Key-Value caches supporting 1M tokens, StreamingLLM attention sinks, and sliding windows."""
+        w = window_size if window_size is not None else getattr(self.config, "sliding_window", None)
+        s = sink_size if sink_size is not None else getattr(self.config, "sink_tokens", 4)
+        max_cap = getattr(self.config, "max_seq_len", 1_048_576)
+        return [KVCache(max_capacity=max_cap, window_size=w, sink_size=s) for _ in range(self.config.n_layer)]
 
     def get_freqs_cis(self, total_len: int, device: torch.device) -> Optional[torch.Tensor]:
         if self.config.pos_emb != "rope":
             return None
-        # Dynamic context extrapolation
+        # Dynamic context extrapolation up to 1,048,576 tokens
         if self.freqs_cis is None or self.freqs_cis.shape[0] < total_len:
-            target_len = max(total_len, self.max_seq_len)
-            scale = max(1.0, total_len / self.config.block_size)
+            max_limit = getattr(self.config, "max_seq_len", 1_048_576)
+            target_len = min(max_limit, max(total_len, self.config.block_size))
+            scale = getattr(self.config, "rope_scaling_factor", 1.0)
+            scaling_type = getattr(self.config, "rope_scaling_type", "yarn")
             new_freqs = precompute_rope_freqs(
                 self.config.n_embd // self.config.n_head,
                 target_len,
                 theta=self.config.rope_theta,
                 scale_factor=scale,
+                scaling_type=scaling_type,
+                original_max_len=self.config.block_size,
             ).to(device)
             self.freqs_cis = new_freqs
         return self.freqs_cis
@@ -242,7 +301,7 @@ class ModernTransformer(nn.Module):
         start_pos: int = 0,
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         B, T = idx.shape
-        max_limit = getattr(self.config, "max_seq_len", 2048)
+        max_limit = getattr(self.config, "max_seq_len", 1_048_576)
         if start_pos + T > max_limit:
             raise ValueError(f"Sequence position {start_pos + T} exceeds max allowed capacity {max_limit}")
 

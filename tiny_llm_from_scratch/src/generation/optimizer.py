@@ -71,3 +71,4 @@ class OutputOptimizer:
         step2 = cls.eliminate_repetition(step1)
         step3 = cls.format_markdown(step2)
         return step3
+

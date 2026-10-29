@@ -65,9 +65,13 @@ class TextGenerator:
         logits = None
 
         if use_kv:
-            # Prefill phase: evaluate initial prompt
+            # Prefill phase: evaluate initial prompt in memory-safe chunks (supports up to 1M context)
             prompt_len = idx.shape[1]
-            logits, _ = self.model(idx, kv_caches=kv_caches, start_pos=0)
+            chunk_size = getattr(getattr(self.model, "config", None), "chunk_size", 512) or 512
+            for start in range(0, prompt_len, chunk_size):
+                end = min(start + chunk_size, prompt_len)
+                chunk = idx[:, start:end]
+                logits, _ = self.model(chunk, kv_caches=kv_caches, start_pos=start)
             logits = logits[:, -1, :].clone()
             current_pos = prompt_len
             next_token = None

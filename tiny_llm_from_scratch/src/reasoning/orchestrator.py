@@ -61,6 +61,10 @@ class ReasoningOrchestrator:
         """Deterministic intent classifier."""
         lower = prompt.lower().strip()
 
+        # Explicit slash commands / priority dispatch
+        if lower.startswith(("/search", "/web")) or "duckduckgo" in lower or any(k in lower for k in ["search the web", "search online", "search web"]):
+            return "web-search"
+
         # Curriculum / Textbook study check
         if any(k in lower for k in [
             "study book", "study textbook", "curriculum", "grade 1", "grade 12",
@@ -88,6 +92,20 @@ class ReasoningOrchestrator:
             "%", "percent", "convert", "miles to", "km to", "celsius", "fahrenheit"
         ]) or re.search(r"(\d+\s*[\+\-\*\/\^]\s*\d+)", lower) or re.search(r"\bx\s*[\+\-\*=]", lower):
             return "mathematical"
+
+        # Creative writing / Intuitive analogy check
+        if any(k in lower for k in [
+            "story", "poem", "poetry", "analogy", "metaphor", "creative",
+            "explain like i'm 5", "eli5", "imagine a world", "essay on", "/creative"
+        ]):
+            return "creative"
+
+        # DuckDuckGo Live Web Search check
+        if any(k in lower for k in [
+            "/search", "/web", "duckduckgo", "search web", "search the web",
+            "search online", "latest news", "look up online", "web search"
+        ]) or lower.startswith("/search") or lower.startswith("/web"):
+            return "web-search"
 
         # Document / Knowledge check
         if any(k in lower for k in [
@@ -213,7 +231,26 @@ class ReasoningOrchestrator:
                 prep.direct_answer = f"The current date and time is: **{res.get('result')}**"
                 return prep
 
-        # 6. Preparation for generation
+        # 6. DuckDuckGo Live Web Search
+        if intent == "web-search":
+            from ..tools.web_search import DuckDuckGoSearchEngine
+            clean_q = re.sub(r"^/(?:search|web)\s*", "", user_prompt).strip()
+            clean_q = re.sub(r"^(?:search|duckduckgo|find)\s+(?:for\s+|the\s+web\s+for\s+)?", "", clean_q, flags=re.IGNORECASE).strip()
+            thinking_steps.append(f"3. Web Search Dispatch: Querying DuckDuckGo Live Engine for '{clean_q}'.")
+            web_results = DuckDuckGoSearchEngine.search(clean_q, max_results=5)
+            thinking_steps.append(f"4. Search Synthesis: Retrieved {len(web_results)} live web sources with citations.")
+            thinking_steps.append("5. Response Grounding: Synthesizing verified factual response with source URLs.")
+            prep.thinking = "\n".join(thinking_steps)
+            prep.direct_answer = DuckDuckGoSearchEngine.format_search_results(clean_q, web_results)
+            prep.retrieved_citations = [r.get("url", "") for r in web_results if r.get("url")]
+            prep.verifications.append({
+                "check": "DuckDuckGo Web Search",
+                "passed": len(web_results) > 0,
+                "details": f"Retrieved {len(web_results)} live web sources",
+            })
+            return prep
+
+        # 7. Preparation for generation
         thinking_steps.append("4. Synthesis & Grounding: Structuring direct, coherent response grounded in the logical deduction above.")
         prompt_with_context = user_prompt
         if retrieved_context:

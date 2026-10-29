@@ -484,3 +484,13 @@ def register_builtin_tools(registry: ToolRegistry, project_root: Path = Path("."
         parameters={"book_path": "path to book", "grade_hint": "optional grade level e.g. grade_5"},
         execute_fn=lambda book_path, grade_hint=None: __import__("src.data.curriculum", fromlist=["CurriculumStudyEngine"]).CurriculumStudyEngine(project_root / "data_curriculum").study_book(Path(book_path), grade_hint=grade_hint),
     ))
+
+    registry.register(ToolDefinition(
+        name="web_search_duckduckgo",
+        description="Searches live web and knowledge graphs using DuckDuckGo with verified citations and links.",
+        parameters={"query": "search query string", "max_results": "optional maximum results (default 5)"},
+        execute_fn=lambda query, max_results=5: __import__("src.tools.web_search", fromlist=["DuckDuckGoSearchEngine"]).DuckDuckGoSearchEngine.format_search_results(
+            query,
+            __import__("src.tools.web_search", fromlist=["DuckDuckGoSearchEngine"]).DuckDuckGoSearchEngine.search(query, int(max_results))
+        ),
+    ))

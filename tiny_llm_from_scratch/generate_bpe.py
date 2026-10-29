@@ -29,6 +29,7 @@ def main():
     parser.add_argument("--top-p", type=float, default=0.9)
     parser.add_argument("--repetition-penalty", type=float, default=1.15)
     parser.add_argument("--repeat-last", type=int, default=64)
+    parser.add_argument("--context-len", type=int, default=1048576, help="Maximum context length limit (up to 1M tokens)")
     parser.add_argument("--think", action="store_true", default=True, help="Reason step-by-step before generating response")
     parser.add_argument("--no-think", action="store_false", dest="think", help="Disable reasoning step")
     args = parser.parse_args()
@@ -108,10 +109,11 @@ def main():
 
         cfg_dict = checkpoint["config"]
         config = ModelConfig.from_dict(cfg_dict)
+        config.max_seq_len = max(getattr(config, "max_seq_len", 1024), args.context_len)
         model = ModernTransformer(config).to(device)
         model.load_state_dict(checkpoint["model_state_dict"])
         block_size = config.block_size
-        print(f"Loaded Modern Transformer v2.0 (block_size: {block_size}, layers: {config.n_layer}, heads: {config.n_head})")
+        print(f"Loaded Modern Transformer v2.2 (block_size: {block_size}, layers: {config.n_layer}, heads: {config.n_head}, max_context: {config.max_seq_len:,} tokens)")
     else:
         model = TinyBPEGPT(
             vocab_size=checkpoint.get("vocab_size", 8000),
