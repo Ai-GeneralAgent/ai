@@ -6,15 +6,21 @@ RAG search, AST verifications, SQLite memory, and live checkpoint switching.
 """
 import argparse
 import os
+os.environ["OPENBLAS_NUM_THREADS"] = "4"
+os.environ["MKL_NUM_THREADS"] = "4"
+os.environ["OMP_NUM_THREADS"] = "4"
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 from pathlib import Path
 import sys
 import time
 from typing import Optional, List
 
-# Ensure UTF-8 stdout on Windows
+# Ensure UTF-8 stdout on Windows safely without re-wrapping
 if sys.platform == "win32":
-    import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 
 import torch
 from tokenizers import Tokenizer
