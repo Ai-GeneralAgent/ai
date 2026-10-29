@@ -106,15 +106,22 @@ def main():
     if args.top_k < 0:
         parser.error("--top-k must be zero or greater")
 
-    if not Path(args.checkpoint).is_file():
-        parser.error(f"Checkpoint not found: {args.checkpoint}")
+    ckpt_path = Path(args.checkpoint)
+    project_root = Path(__file__).resolve().parent
+    if not ckpt_path.is_file():
+        if (project_root / ckpt_path).is_file():
+            ckpt_path = project_root / ckpt_path
+        elif (project_root / "checkpoints" / ckpt_path).is_file():
+            ckpt_path = project_root / "checkpoints" / ckpt_path
+        else:
+            parser.error(f"Checkpoint not found: {args.checkpoint}")
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Using device: {device}")
 
     # Only load checkpoints you created or trust.
     ckpt = torch.load(
-        args.checkpoint,
+        ckpt_path,
         map_location=device,
         weights_only=False,
     )

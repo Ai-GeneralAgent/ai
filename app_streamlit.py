@@ -150,3 +150,4 @@ if prompt := st.chat_input("Ask a question, enter an equation, or execute Python
             "thinking": prep.thinking,
             "citations": prep.retrieved_citations,
         })
+

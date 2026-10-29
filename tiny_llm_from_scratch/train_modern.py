@@ -53,7 +53,7 @@ def main():
 
     # Resolve dataset or cache file with robust multi-device fallback
     data_arg = Path(args.data)
-    if not data_arg.is_absolute():
+    if not data_arg.is_file() and (PROJECT_ROOT / data_arg).is_file():
         data_arg = PROJECT_ROOT / data_arg
 
     cache = None
@@ -86,8 +86,11 @@ def main():
     best_val_loss = float("inf")
     if args.resume:
         resume_p = Path(args.resume)
-        if not resume_p.is_absolute():
-            resume_p = PROJECT_ROOT / resume_p
+        if not resume_p.is_file():
+            if (PROJECT_ROOT / resume_p).is_file():
+                resume_p = PROJECT_ROOT / resume_p
+            elif (PROJECT_ROOT / "checkpoints" / resume_p).is_file():
+                resume_p = PROJECT_ROOT / "checkpoints" / resume_p
         from src.models import load_modern_checkpoint
         model, payload = load_modern_checkpoint(resume_p, device=device)
         initial_step = payload.get("step", 0)

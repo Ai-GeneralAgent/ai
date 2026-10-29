@@ -43,3 +43,4 @@ def get_hardware_info() -> Dict[str, Any]:
         "cuda_available": torch.cuda.is_available(),
     }
     return info
+

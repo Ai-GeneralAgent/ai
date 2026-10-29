@@ -29,3 +29,4 @@ def configure_utf8_console():
 def log_step(step: int, total_steps: int, loss: float, lr: float, speed: float):
     msg = f"Step {step:5d}/{total_steps} | Loss: {loss:.4f} | LR: {lr:.2e} | {speed:.0f} tok/s"
     print(msg)
+

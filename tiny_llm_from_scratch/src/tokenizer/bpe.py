@@ -50,3 +50,4 @@ def load_tokenizer(path: Union[str, Path]) -> Tokenizer:
     if not p.is_file():
         raise FileNotFoundError(f"Tokenizer not found at: {p.resolve()}")
     return Tokenizer.from_file(str(p))
+

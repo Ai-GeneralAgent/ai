@@ -45,13 +45,22 @@ def main():
         parser.error("--repeat-last must be >= 0")
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    project_root = Path(__file__).resolve().parent
     path = Path(args.checkpoint)
+
+    if not path.exists():
+        if (project_root / path).exists():
+            path = project_root / path
+        elif (project_root / "checkpoints" / path).exists():
+            path = project_root / "checkpoints" / path
+        elif (project_root / "checkpoints").is_dir():
+            path = project_root / "checkpoints"
 
     # If user passed a directory, resolve to the best checkpoint inside it
     if path.is_dir():
         candidates = [
-            path / "modern_base_v2_best.pt",
             path / "modern_production_v2_best.pt",
+            path / "modern_base_v2_best.pt",
             path / "modern_knowledge_v2_best.pt",
             path / "modern_tiny_transformer_best.pt",
             path / "tiny_bpe_expanded_continued_v2.pt",
@@ -72,12 +81,7 @@ def main():
         path = resolved
 
     if not path.is_file():
-        # Check in checkpoints/ subfolder if not found
-        fallback = Path("checkpoints") / path
-        if fallback.is_file():
-            path = fallback
-        else:
-            raise FileNotFoundError(f"Checkpoint not found: {path.resolve()}")
+        raise FileNotFoundError(f"Checkpoint not found: {path.resolve()}")
 
     print(f"Loading checkpoint: {path.name}")
     checkpoint = torch.load(path, map_location=device, weights_only=False)

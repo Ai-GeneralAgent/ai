@@ -22,6 +22,10 @@ class CompactTokenCache:
         self._mmap: Optional[np.memmap] = None
 
     @property
+    def cache_path(self) -> Path:
+        return self.cache_file
+
+    @property
     def mmap(self) -> np.memmap:
         if self._mmap is None:
             self._mmap = np.memmap(str(self.cache_file), dtype=np.uint16, mode="r")
