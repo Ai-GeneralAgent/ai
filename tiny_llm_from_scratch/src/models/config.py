@@ -141,3 +141,60 @@ class ModelConfig:
             arch_version="2.2.0",
         )
 
+    @classmethod
+    def preset_qwen_2b(cls, vocab_size: int = 151936) -> "ModelConfig":
+        """2B parameter scale matching Qwen 3.5 2B."""
+        return cls(
+            vocab_size=vocab_size,
+            block_size=1024,
+            max_seq_len=32768,
+            n_embd=2048,
+            n_head=16,
+            n_kv_head=4,
+            n_layer=24,
+            norm_type="rmsnorm",
+            pos_emb="rope",
+            ffn_type="swiglu",
+            rope_theta=1000000.0,
+            tie_weights=True,
+            arch_version="2.2.0",
+        )
+
+    @classmethod
+    def preset_qwen_5_3b(cls, vocab_size: int = 151936) -> "ModelConfig":
+        """5.3B parameter scale matching Qwen 5.3B."""
+        return cls(
+            vocab_size=vocab_size,
+            block_size=2048,
+            max_seq_len=32768,
+            n_embd=3584,
+            n_head=28,
+            n_kv_head=4,
+            n_layer=28,
+            norm_type="rmsnorm",
+            pos_emb="rope",
+            ffn_type="swiglu",
+            rope_theta=1000000.0,
+            tie_weights=False,
+            arch_version="2.2.0",
+        )
+
+    @classmethod
+    def preset_5b(cls, vocab_size: int = 16384) -> "ModelConfig":
+        """5B parameter model configuration adapted for local 16k byte-level vocabulary."""
+        return cls(
+            vocab_size=vocab_size,
+            block_size=2048,
+            max_seq_len=32768,
+            n_embd=3584,
+            n_head=28,
+            n_kv_head=4,
+            n_layer=28,
+            norm_type="rmsnorm",
+            pos_emb="rope",
+            ffn_type="swiglu",
+            rope_theta=1000000.0,
+            tie_weights=True,
+            arch_version="2.2.0",
+        )
+

@@ -29,7 +29,7 @@ def main():
     parser.add_argument("--grad-accum", type=int, default=2)
     parser.add_argument("--lr", type=float, default=3e-4)
     parser.add_argument("--block-size", type=int, default=256)
-    parser.add_argument("--preset", choices=["tiny", "small", "25m", "1m"], default="small", help="Architecture preset: tiny (~1.6M), small (~2.8M), 25m (~27.3M), 1m (~2.8M 1M context)")
+    parser.add_argument("--preset", choices=["tiny", "small", "25m", "1m", "qwen2b", "qwen5b"], default="small", help="Architecture preset: tiny (~1.6M), small (~2.8M), 25m (~27.3M), 1m (~2.8M 1M context), qwen2b (1.47B), qwen5b (5.3B)")
     parser.add_argument("--optimizer", choices=["adamw", "muon"], default="adamw", help="muon = Muon for hidden weights + AdamW for embeddings/norms")
     parser.add_argument("--muon-lr", type=float, default=0.02)
     parser.add_argument("--eval-interval", type=int, default=25)
@@ -108,6 +108,10 @@ def main():
             cfg = ModelConfig.preset_tiny(vocab_size=vocab_sz)
         elif args.preset == "1m":
             cfg = ModelConfig.preset_1m(vocab_size=vocab_sz)
+        elif args.preset == "qwen2b":
+            cfg = ModelConfig.preset_qwen_2b(vocab_size=vocab_sz)
+        elif args.preset == "qwen5b":
+            cfg = ModelConfig.preset_qwen_5_3b(vocab_size=vocab_sz)
         else:
             cfg = ModelConfig.preset_small(vocab_size=vocab_sz)
         cfg.block_size = args.block_size

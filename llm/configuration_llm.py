@@ -93,6 +93,45 @@ class LLMConfig:
             tie_word_embeddings=True,
         )
 
+    @classmethod
+    def preset_qwen_5_3b(cls, vocab_size: int = 151936) -> "LLMConfig":
+        """
+        Architecture configuration matching 5.3B parameter scale (Qwen 5.3B).
+        Hidden: 3584, Layers: 28, Heads: 28, KV Heads: 4 (GQA 7:1), Intermediate: 11264.
+        """
+        return cls(
+            vocab_size=vocab_size,
+            hidden_size=3584,
+            intermediate_size=11264,
+            num_hidden_layers=28,
+            num_attention_heads=28,
+            num_key_value_heads=4,
+            head_dim=128,
+            max_position_embeddings=32768,
+            tie_word_embeddings=False,
+            rope_theta=1000000.0,
+            rms_norm_eps=1e-6,
+        )
+
+    @classmethod
+    def preset_5b(cls, vocab_size: int = 16384) -> "LLMConfig":
+        """
+        5B parameter model configuration adapted for local 16k byte-level vocabulary.
+        """
+        return cls(
+            vocab_size=vocab_size,
+            hidden_size=3584,
+            intermediate_size=11264,
+            num_hidden_layers=28,
+            num_attention_heads=28,
+            num_key_value_heads=4,
+            head_dim=128,
+            max_position_embeddings=32768,
+            tie_word_embeddings=True,
+            rope_theta=1000000.0,
+            rms_norm_eps=1e-6,
+        )
+
     def to_dict(self) -> Dict[str, Any]:
         return {k: getattr(self, k) for k in self.__dataclass_fields__}
 
