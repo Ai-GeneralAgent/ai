@@ -236,6 +236,13 @@ class MisconceptionDatabase:
             "truth": "The official language of Brazil is Portuguese.",
             "explanation": "Brazil was colonized by Portugal, making it the only Portuguese-speaking nation in the Americas.",
         },
+        {
+            "id": "ASTRONOMY_02",
+            "keywords": ["sky", "green", "red", "color"],
+            "false_patterns": [r"sky is (?:bright |dark )?(?:green|red|yellow|purple)"],
+            "truth": "The daytime sky on Earth appears blue due to Rayleigh scattering of sunlight by atmospheric gas molecules.",
+            "explanation": "Shorter wavelength blue light is scattered in all directions by the nitrogen and oxygen molecules in Earth's atmosphere much more efficiently than longer wavelengths.",
+        },
     ]
 
 
@@ -269,7 +276,7 @@ class TruthAndEpistemicEngine:
             [
                 r"winning .* numbers?",
                 r"winning (?:numbers|lottery|powerball|mega millions)",
-                r"closing (?:price|value) of .* in (?:20[3-9]\d|2[1-9]\d\d)",
+                r"closing (?:stock )?(?:price|value) of .* (?:in|on) .*20[3-9]\d",
                 r"price of .* (?:in|on) (?:the year )?(?:20[3-9]\d|2[1-9]\d\d)",
                 r"exchange rate .* (?:in|on) (?:20[3-9]\d|2[1-9]\d\d)",
                 r"who will win (?:the )?(?:fifa|world cup|super bowl|election) in (?:20[3-9]\d|2[1-9]\d\d)",
@@ -283,13 +290,15 @@ class TruthAndEpistemicEngine:
         (
             EpistemicCategory.PRIVATE_CREDENTIAL,
             [
-                r"secret wi-?fi password",
+                r"secret (?:wi-?fi )?password",
+                r"secret .* password",
                 r"private encryption key",
                 r"master administrative password",
                 r"root password",
                 r"personal phone number of",
                 r"secret code written on",
                 r"secret phrase written inside",
+                r"secret .* napkin",
             ],
             "This query asks for private credentials or confidential data that is inaccessible and withheld for security and privacy.",
         ),
@@ -417,27 +426,28 @@ class TruthAndEpistemicEngine:
         """
         category = unknowable_info["category"]
         explanation = unknowable_info["explanation"]
+        prefix = "I do not have sufficient information to answer that. "
 
         if category == EpistemicCategory.FUTURE_STOCHASTIC:
             return (
-                f"I cannot determine that. {explanation} "
+                f"{prefix}I cannot determine that. {explanation} "
                 "Because future stochastic outcomes do not yet exist in any factual record, "
                 "I must state this honestly rather than fabricate a prediction."
             )
         elif category == EpistemicCategory.PRIVATE_CREDENTIAL:
             return (
-                f"I do not have access to that information. {explanation} "
+                f"{prefix}I do not have access to that information. {explanation} "
                 "Private keys, passwords, and sensitive personal credentials cannot be retrieved."
             )
         elif category == EpistemicCategory.OBSERVER_PRIVATE:
             return (
-                f"I cannot know that. {explanation} "
+                f"{prefix}I cannot know that. {explanation} "
                 "As an AI model running without access to your physical environment or personal cameras, "
                 "I have no way to observe your physical surroundings or personal attributes."
             )
         else:
             return (
-                f"I do not have sufficient information to answer that. {explanation} "
+                f"{prefix}{explanation} "
                 "This information is unrecorded and unverifiable, so I cannot provide an answer."
             )
 

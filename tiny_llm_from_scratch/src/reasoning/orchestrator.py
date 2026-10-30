@@ -31,6 +31,13 @@ from ..security.malware_lab import MalwareStaticAnalyzer
 from ..security.reverse_lab import ReverseEngineeringToolkit
 from ..security.lab import IsolatedSecurityLab
 from ..dev.code_analyzer import ProjectCodeAnalyzer
+from ..tools.browser import WebBrowserEngine
+from ..tools.github_engine import GitHubEngine
+from ..tools.internet_learner import InternetLearnerEngine
+from ..agents.autonomous_agent import AutonomousWorkAgent
+from ..tools.web_search import DuckDuckGoSearchEngine
+from ..tools.free_tools import ArxivSearchEngine, WikipediaEngine, WeatherEngine
+from .truth_engine import TruthAndEpistemicEngine
 
 
 @dataclass
@@ -82,6 +89,13 @@ class ReasoningOrchestrator:
         cleaned_punct = re.sub(r"[^\w\s]", "", lower).strip()
         words = lower.split()
 
+        # 0. Anti-Sycophancy & Epistemic Calibration (Checked first for ground truth & unanswerability)
+        from .truth_engine import TruthAndEpistemicEngine
+        if TruthAndEpistemicEngine.detect_sycophancy_trap(prompt):
+            return "sycophancy-trap"
+        if TruthAndEpistemicEngine.detect_unknowable_query(prompt):
+            return "insufficient-knowledge"
+
         # 1. Explicit tool commands / Web Search & Internet Learning
         if lower.startswith(("/learn", "/study-web")) or any(k in lower for k in [
             "learn from internet", "learn from the internet", "learn from web",
@@ -90,7 +104,53 @@ class ReasoningOrchestrator:
         ]):
             return "internet-learning"
 
-        if lower.startswith(("/search", "/web")) or "duckduckgo" in lower or any(k in lower for k in ["search the web", "search online", "search web"]):
+        # 1b. Autonomous Web Browsing & Direct URL Extraction
+        if lower.startswith("/browse") or re.search(r"https?://[^\s<>\"']+", prompt) or any(k in lower for k in ["browse website", "browse url", "visit website", "open webpage"]):
+            return "web-browse"
+
+        # 1c. Autonomous Agent Mission Execution
+        if lower.startswith("/agent") or any(k in lower for k in ["autonomous mission", "agent mission", "act as an autonomous agent", "agent work:", "agent goal:"]):
+            return "autonomous-agent"
+
+        # 1d. Local Git Repository Operations
+        if lower.startswith("/git") or any(k in lower for k in [
+            "git status", "git diff", "git log", "uncommitted changes",
+            "what files are modified in git", "what did i change in git",
+            "recent git commits", "local git commit", "check git status",
+            "git changes", "git commit history", "git commits"
+        ]):
+            return "git-local"
+
+        # 1e. Remote GitHub Operations
+        if lower.startswith("/gh") or any(k in lower for k in [
+            "search github", "find github repo", "view github repo",
+            "github repo info", "list github issues", "github issues for",
+            "file from github", "github repository"
+        ]):
+            return "github-remote"
+
+        # 1f. Static Code Security Audit
+        if lower.startswith("/audit") or any(k in lower for k in [
+            "audit this code", "security audit", "audit code for vulnerabilities",
+            "check code for vulnerabilities", "audit file", "static security analysis"
+        ]):
+            return "code-audit"
+
+        # 1g. Sandboxed Code Execution
+        if lower.startswith("/code") or any(k in lower for k in [
+            "run this code", "execute this python", "run this python",
+            "execute snippet", "run snippet", "execute the following code", "run the following code"
+        ]):
+            return "code-execution"
+
+        # 1h. Isolated Security Lab Testing
+        if lower.startswith("/lab") or any(k in lower for k in [
+            "simulate sql injection", "test sql injection in lab", "test xss in lab",
+            "lab experiment", "security lab experiment"
+        ]):
+            return "security-lab"
+
+        if lower.startswith(("/search", "/web")) or "duckduckgo" in lower or any(k in lower for k in ["search the web", "search online", "search web", "look up online", "google for", "find on the web", "latest news on"]):
             return "web-search"
 
         # 2. Academic ArXiv, Wikipedia, Weather Tools
@@ -780,7 +840,6 @@ class ReasoningOrchestrator:
 
         # 14b. Internet Learning via DuckDuckGo & Autonomous Web Ingestion
         if intent == "internet-learning":
-            from ..tools.internet_learner import InternetLearnerEngine
             clean_topic = re.sub(r"^(?:/learn|/study-web|learn\s+(?:about|from\s+(?:the\s+)?internet\s+about)?|use\s+duck\s*duck\s*go\s+(?:and\s+)?(?:make\s+it\s+able\s+to\s+)?(?:also\s+)?learn\s+(?:from\s+(?:the\s+)?internet\s+about)?)\s*", "", user_prompt, flags=re.IGNORECASE).strip()
             clean_topic = re.sub(r"^(?:use\s+duck\s*duck\s*go\s+and\s+make\s+it\s+able\s+to\s+also\s+learn\s+(?:foem|from)?\s+internet\s+make\s+it\s+able\s+to\s+learn\s+(?:and\s+more\s+thing)?)\s*", "artificial intelligence and machine learning", clean_topic, flags=re.IGNORECASE).strip()
             if not clean_topic or len(clean_topic) < 2:
@@ -799,9 +858,241 @@ class ReasoningOrchestrator:
             })
             return prep
 
+        # 14c. Autonomous Web Browsing
+        if intent == "web-browse":
+            url_match = re.search(r"https?://[^\s<>\"']+", user_prompt)
+            target_url = url_match.group(0) if url_match else ""
+            if not target_url:
+                target_url = re.sub(r"^(?:/browse|browse(?:\s+website|\s+url)?|visit(?:\s+website)?|open\s+webpage)\s*", "", user_prompt, flags=re.IGNORECASE).strip()
+            if not target_url.startswith(("http://", "https://")):
+                target_url = "https://" + target_url
+
+            thinking_steps.append(f"3. Web Browser: Fetching and parsing HTML document from '{target_url}'.")
+            page = WebBrowserEngine.browse_url(target_url, max_chars=4000)
+            char_count = page.get("content_length", len(page.get("content", "")))
+            status_code = page.get("status_code", 200)
+            thinking_steps.append(f"4. Browser Synthesis: Extracted {char_count:,} characters (HTTP {status_code}).")
+            prep.thinking = "\n".join(thinking_steps)
+            prep.direct_answer = WebBrowserEngine.format_browser_display(page)
+            prep.retrieved_citations = [target_url]
+            prep.verifications.append({
+                "check": "Web Browser Engine",
+                "passed": page.get("success", False) or status_code == 200,
+                "details": f"Retrieved {char_count:,} characters from {target_url}",
+            })
+            return prep
+
+        # 14d. Autonomous Agent Missions
+        if intent == "autonomous-agent":
+            mission_goal = re.sub(r"^(?:/agent|autonomous\s+mission:|agent\s+mission:|act\s+as\s+an\s+autonomous\s+agent\s+to|agent\s+work:|agent\s+goal:)\s*", "", user_prompt, flags=re.IGNORECASE).strip()
+            if not mission_goal:
+                mission_goal = "Investigate project repository and summarize key features"
+            thinking_steps.append(f"3. Autonomous Agent Loop: Decomposing goal into executable sub-steps: '{mission_goal}'.")
+            agent = AutonomousWorkAgent(self.tools or ToolRegistry(), max_steps=8, verbose=False)
+            agent_res = agent.execute_mission(mission_goal)
+            thinking_steps.append(f"4. Agent Execution: Completed {len(agent_res.steps)} steps in {agent_res.elapsed_sec:.2f}s.")
+            prep.thinking = "\n".join(thinking_steps)
+            steps_md = "\n".join([f"- **Step {s.step_num}:** {s.thought} *(Tool: `{s.tool_name or 'internal'}`)*" for s in agent_res.steps])
+            prep.direct_answer = (
+                f"### Autonomous Agent Mission Report\n\n"
+                f"- **Goal:** {mission_goal}\n"
+                f"- **Execution Time:** {agent_res.elapsed_sec:.2f}s ({len(agent_res.steps)} steps)\n\n"
+                f"**Execution Steps:**\n{steps_md}\n\n"
+                f"**Synthesized Result:**\n{agent_res.synthesized_output}"
+            )
+            prep.verifications.append({
+                "check": "Autonomous Agent Mission",
+                "passed": agent_res.completed,
+                "details": f"Completed in {agent_res.elapsed_sec:.2f}s across {len(agent_res.steps)} steps",
+            })
+            return prep
+
+        # 14e. Local Git Operations
+        if intent == "git-local":
+            from pathlib import Path
+            project_root = Path.cwd()
+            thinking_steps.append("3. Local Git Engine: Inspecting repository version control status.")
+            if "diff" in lower_prompt:
+                res = GitHubEngine.git_diff(project_root)
+                thinking_steps.append("4. Git Diff: Extracted uncommitted diff patch.")
+                prep.thinking = "\n".join(thinking_steps)
+                if res.get("success"):
+                    patch_text = res.get("patch") or "(No uncommitted diffs found. Working directory is clean.)"
+                    prep.direct_answer = f"### Local Git Repository Diff\n\n```diff\n{patch_text}\n```"
+                else:
+                    prep.direct_answer = f"**Git Diff Error:** {res.get('error')}"
+                return prep
+            elif any(k in lower_prompt for k in ["log", "commit", "history"]):
+                res = GitHubEngine.git_log(project_root, limit=5)
+                thinking_steps.append("4. Git Log: Retrieved recent commit history.")
+                prep.thinking = "\n".join(thinking_steps)
+                if res.get("success"):
+                    commits_md = "\n".join([f"- **`{c.get('commit')}`** {c.get('message')} *({c.get('author')}, {c.get('date')})*" for c in res.get("commits", [])])
+                    prep.direct_answer = f"### Recent Git Commits\n\n{commits_md or 'No commits found.'}"
+                else:
+                    prep.direct_answer = f"**Git Log Error:** {res.get('error')}"
+                return prep
+            else:
+                res = GitHubEngine.git_status(project_root)
+                thinking_steps.append(f"4. Git Status: Branch '{res.get('branch')}', {res.get('changed_files_count', 0)} files changed.")
+                prep.thinking = "\n".join(thinking_steps)
+                if res.get("success"):
+                    files_list = "\n".join([f"- `{f}`" for f in res.get("files", [])]) if res.get("files") else "*(Working tree clean - no uncommitted changes)*"
+                    prep.direct_answer = (
+                        f"### Local Git Repository Status\n\n"
+                        f"- **Current Branch:** `{res.get('branch')}`\n"
+                        f"- **Uncommitted Changed Files:** {res.get('changed_files_count')}\n\n"
+                        f"**Modified Files:**\n{files_list}"
+                    )
+                else:
+                    prep.direct_answer = f"**Git Status Error:** {res.get('error')}"
+                return prep
+
+        # 14f. Remote GitHub Operations
+        if intent == "github-remote":
+            thinking_steps.append("3. GitHub Engine: Dispatching remote GitHub API query.")
+            if "search" in lower_prompt or "find" in lower_prompt:
+                q = re.sub(r"^(?:/gh\s+search|search\s+github\s+(?:for\s+)?|find\s+github\s+repos?\s+(?:for\s+)?|github\s+search\s+)\s*", "", user_prompt, flags=re.IGNORECASE).strip()
+                res = GitHubEngine.search_repositories(q, limit=5)
+                thinking_steps.append(f"4. GitHub Search: Found {len(res.get('repositories', []))} repositories.")
+                prep.thinking = "\n".join(thinking_steps)
+                prep.direct_answer = GitHubEngine.format_repos_display(res)
+                return prep
+            elif "issues" in lower_prompt:
+                repo = re.sub(r"^(?:/gh\s+issues|list\s+github\s+issues\s+(?:for\s+)?|github\s+issues\s+(?:for\s+)?)\s*", "", user_prompt, flags=re.IGNORECASE).strip()
+                res = GitHubEngine.list_issues(repo, limit=5)
+                thinking_steps.append(f"4. GitHub Issues: Retrieved issues for '{repo}'.")
+                prep.thinking = "\n".join(thinking_steps)
+                if res.get("success"):
+                    issues_md = "\n".join([f"- **#{iss.get('number')}** {iss.get('title')} `[{iss.get('state')}]`" for iss in res.get("issues", [])])
+                    prep.direct_answer = f"### GitHub Issues for `{res.get('repo')}`\n\n{issues_md or 'No open issues found.'}"
+                else:
+                    prep.direct_answer = f"**GitHub Error:** {res.get('error')}"
+                return prep
+            else:
+                repo = re.sub(r"^(?:/gh\s+view|view\s+github\s+repo\s+|github\s+repo\s+(?:info\s+)?(?:for\s+)?)\s*", "", user_prompt, flags=re.IGNORECASE).strip()
+                res = GitHubEngine.get_repo_info(repo)
+                thinking_steps.append(f"4. GitHub Repo: Retrieved metadata for '{repo}'.")
+                prep.thinking = "\n".join(thinking_steps)
+                if res.get("success"):
+                    d = res.get("data", {})
+                    prep.direct_answer = (
+                        f"### GitHub Repository: `{res.get('repo')}`\n\n"
+                        f"- **Description:** {d.get('description') or 'N/A'}\n"
+                        f"- **Stars:** {d.get('stargazerCount', 0):,}\n"
+                        f"- **Forks:** {d.get('forkCount', 0):,}\n"
+                        f"- **Default Branch:** `{d.get('defaultBranch', 'main')}`\n"
+                        f"- **URL:** {d.get('url')}"
+                    )
+                else:
+                    prep.direct_answer = f"**GitHub Error:** {res.get('error')}"
+                return prep
+
+        # 14g. Static Code Security Audit
+        if intent == "code-audit":
+            from pathlib import Path
+            thinking_steps.append("3. Static Code Auditor: Performing automated AST vulnerability and security scan.")
+            code_match = re.search(r"```(?:python)?\s*([\s\S]*?)```", user_prompt)
+            if code_match:
+                code_to_audit = code_match.group(1).strip()
+                res = StaticCodeAuditor.audit_code(code_to_audit, filename="snippet.py")
+            else:
+                target_str = re.sub(r"^(?:/audit|audit\s+(?:this\s+)?code\s+(?:for\s+vulnerabilities)?|security\s+audit\s+(?:of\s+)?|audit\s+file\s+)\s*", "", user_prompt, flags=re.IGNORECASE).lstrip(": ").strip()
+                p = Path(target_str)
+                if p.is_file():
+                    res = StaticCodeAuditor.audit_file(p)
+                else:
+                    res = StaticCodeAuditor.audit_code(target_str, filename="input_code.py")
+            thinking_steps.append(f"4. Audit Findings: Identified {res.get('total_findings', 0)} security findings.")
+            prep.thinking = "\n".join(thinking_steps)
+            findings_md = ""
+            if res.get("findings"):
+                for f in res["findings"]:
+                    findings_md += f"\n- **[{f['severity']}]** Line {f['line_number']} `[{f['rule_id']}]`: {f['message']}\n  - *Snippet:* `{f['code_snippet']}`\n  - *Remediation:* {f['recommendation']}\n"
+            else:
+                findings_md = "\n*(No high or medium severity vulnerabilities detected. Code adheres to secure coding standards.)*"
+            prep.direct_answer = (
+                f"### Static Code Security Audit Report\n\n"
+                f"- **Target:** `{res.get('file', 'snippet.py')}`\n"
+                f"- **Total Findings:** {res.get('total_findings', 0)} (High: {res.get('high_severity', 0)}, Medium: {res.get('medium_severity', 0)})\n"
+                f"{findings_md}"
+            )
+            prep.verifications.append({
+                "check": "Static Code Security Audit",
+                "passed": res.get("high_severity", 0) == 0,
+                "details": f"Found {res.get('total_findings', 0)} security findings",
+            })
+            return prep
+
+        # 14h. Sandboxed Python Code Execution
+        if intent == "code-execution":
+            thinking_steps.append("3. Python Code Sandbox: Isolating execution in secure sandboxed sub-environment.")
+            code_match = re.search(r"```(?:python)?\s*([\s\S]*?)```", user_prompt)
+            if code_match:
+                code_to_run = code_match.group(1).strip()
+            else:
+                code_to_run = re.sub(
+                    r"^(?:/code|run\s+this\s+python\s+code:?|execute\s+this\s+python\s+code:?|run\s+this\s+code:?|execute\s+this\s+python:?|run\s+this\s+python:?|execute\s+snippet:?|run\s+snippet:?|run\s+the\s+following\s+code:?|execute\s+the\s+following\s+code:?)\s*",
+                    "",
+                    user_prompt,
+                    flags=re.IGNORECASE,
+                ).strip()
+            sandbox_res = SafeCodeSandbox.execute_snippet(code_to_run)
+            thinking_steps.append(f"4. Execution Status: {'SUCCESS' if sandbox_res.get('success') else 'FAILED'} in {sandbox_res.get('elapsed', 0):.4f}s.")
+            prep.thinking = "\n".join(thinking_steps)
+            stdout_text = sandbox_res.get("stdout", "").strip() or "(Executed with returncode 0; no stdout)"
+            if sandbox_res.get("success"):
+                prep.direct_answer = (
+                    f"### Sandboxed Python Execution Result\n\n"
+                    f"```python\n{code_to_run}\n```\n\n"
+                    f"**Standard Output:**\n```text\n{stdout_text}\n```\n\n"
+                    f"*(Executed safely in {sandbox_res.get('elapsed', 0):.4f}s with restricted builtins)*"
+                )
+            else:
+                prep.direct_answer = (
+                    f"### Sandboxed Python Execution Failed\n\n"
+                    f"```python\n{code_to_run}\n```\n\n"
+                    f"**Error:**\n```text\n{sandbox_res.get('error', 'Execution error')}\n```"
+                )
+            prep.verifications.append({
+                "check": "Sandboxed Code Execution",
+                "passed": sandbox_res.get("success", False),
+                "details": f"Completed in {sandbox_res.get('elapsed', 0):.4f}s",
+            })
+            return prep
+
+        # 14i. Isolated Security Lab Testing
+        if intent == "security-lab":
+            lab = IsolatedSecurityLab()
+            thinking_steps.append("3. Isolated Security Lab: Setting up controlled defensive reproduction experiment.")
+            if "xss" in lower_prompt:
+                payload_m = re.search(r"payload:?\s*([^\n]+)", user_prompt, flags=re.IGNORECASE)
+                payload = payload_m.group(1).strip() if payload_m else "<script>alert(1)</script>"
+                res = lab.test_xss_sanitization_mitigation(payload)
+            else:
+                payload_m = re.search(r"payload:?\s*([^\n]+)", user_prompt, flags=re.IGNORECASE)
+                payload = payload_m.group(1).strip() if payload_m else "admin' OR '1'='1"
+                res = lab.test_sql_injection_mitigation(payload)
+            thinking_steps.append(f"4. Experiment Evaluation: Mitigation verified {'SUCCESS' if res.is_mitigated_after else 'FAILED'}.")
+            prep.thinking = "\n".join(thinking_steps)
+            prep.direct_answer = (
+                f"### Isolated Security Lab Experiment\n\n"
+                f"- **Target:** `{res.target}`\n"
+                f"- **Vulnerability Type:** {res.vulnerability_type}\n"
+                f"- **Vulnerable Before Mitigation:** {'YES' if res.is_vulnerable_before else 'NO'}\n"
+                f"- **Mitigated After Control:** {'YES' if res.is_mitigated_after else 'NO'}\n\n"
+                f"**Evidence:**\n{res.evidence}\n\n"
+                f"**Remediation Guidance:**\n{res.remediation_guidance}"
+            )
+            prep.verifications.append({
+                "check": "Security Lab Mitigation",
+                "passed": res.is_mitigated_after,
+                "details": f"Mitigated {res.vulnerability_type} on {res.target}",
+            })
+            return prep
+
         # 15. DuckDuckGo Live Web Search
         if intent == "web-search":
-            from ..tools.web_search import DuckDuckGoSearchEngine
             clean_q = re.sub(r"^/(?:search|web)\s*", "", user_prompt).strip()
             clean_q = re.sub(r"^(?:search|duckduckgo|find)\s+(?:for\s+|the\s+web\s+for\s+)?", "", clean_q, flags=re.IGNORECASE).strip()
             thinking_steps.append(f"3. Web Search Dispatch: Querying DuckDuckGo Live Engine for '{clean_q}'.")
@@ -820,7 +1111,6 @@ class ReasoningOrchestrator:
 
         # 16. ArXiv Academic Paper Search
         if intent == "arxiv-search":
-            from ..tools.free_tools import ArxivSearchEngine
             clean_q = re.sub(r"^/arxiv\s*", "", user_prompt).strip()
             clean_q = re.sub(r"^(?:search\s+arxiv\s+(?:for\s+)?|papers?\s+on\s+)", "", clean_q, flags=re.IGNORECASE).strip()
             thinking_steps.append(f"3. ArXiv Research Dispatch: Querying open repository for '{clean_q}'.")
@@ -839,7 +1129,6 @@ class ReasoningOrchestrator:
 
         # 17. Wikipedia Deep Concept Lookup
         if intent == "wiki-lookup":
-            from ..tools.free_tools import WikipediaEngine
             clean_t = re.sub(r"^/wiki\s*", "", user_prompt).strip()
             clean_t = re.sub(r"^(?:wikipedia|what\s+is\s+|who\s+is\s+)", "", clean_t, flags=re.IGNORECASE).strip().rstrip("?")
             thinking_steps.append(f"3. Wikipedia Knowledge Dispatch: Querying encyclopedia for '{clean_t}'.")
@@ -858,6 +1147,7 @@ class ReasoningOrchestrator:
 
         # 18. Open-Meteo Real-Time Weather
         if intent == "weather-lookup":
+            clean_c = re.sub(r"^/weather\s*", "", user_prompt).strip()
             from ..tools.free_tools import WeatherEngine
             clean_c = re.sub(r"^/weather\s*", "", user_prompt).strip()
             clean_c = re.sub(r"^(?:weather\s+in|weather\s+of|temperature\s+in|forecast\s+for)\s+", "", clean_c, flags=re.IGNORECASE).strip().rstrip("?")

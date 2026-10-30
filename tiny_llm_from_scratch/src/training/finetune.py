@@ -1,4 +1,5 @@
 import json
+import math
 from pathlib import Path
 import time
 from typing import Dict, List, Optional, Tuple, Union
@@ -166,18 +167,25 @@ def finetune_instructions(
     save_interval: int = 250,
     optimizer_type: str = "adamw",
     muon_lr: float = 0.01,
+    grad_accum_steps: int = 1,
+    warmup_steps: int = 250,
+    min_lr_ratio: float = 0.1,
 ) -> ModernTransformer:
     """
     Industrial Supervised Fine-Tuning (SFT) Loop with:
     - Completion-only loss masking (-100 for prompt tokens)
     - Anti-catastrophic forgetting via replay buffer blending
     - Muon / AdamW hybrid optimization option
+    - Cosine Learning Rate Decay with Linear Warmup
+    - Gradient Accumulation for scaled effective batch sizes
     - Global gradient norm clipping (1.0)
     - Loss spike and NaN/Inf guards
     - Wall-clock training duration limit (max_time in seconds)
     - Periodic and best-loss checkpoint saving
     """
     model.train()
+    grad_accum_steps = max(1, grad_accum_steps)
+    warmup_steps = max(1, warmup_steps)
     dataset = InstructionDataset(
         dataset_path,
         tokenizer,
@@ -207,7 +215,7 @@ def finetune_instructions(
             {"params": nodecay_adam, "weight_decay": 0.0},
         ]
         optimizer = HybridMuonAdamW(muon_params, adam_groups, lr=lr, muon_lr=muon_lr)
-        print(f"[OPTIMIZER] Hybrid Muon + AdamW active (Muon LR: {muon_lr}, AdamW LR: {lr}).")
+        print(f"[OPTIMIZER] Hybrid Muon + AdamW active (Muon LR: {muon_lr}, AdamW LR: {lr}, Warmup: {warmup_steps}, GradAccum: {grad_accum_steps}).")
     else:
         # Decouple weight decay: 2D weights get decay, 1D layer norms & biases get 0.0
         decay_params = [p for p in model.parameters() if p.requires_grad and p.dim() >= 2]
@@ -217,15 +225,18 @@ def finetune_instructions(
             {"params": nodecay_params, "weight_decay": 0.0},
         ]
         optimizer = torch.optim.AdamW(optim_groups, lr=lr, betas=(0.9, 0.95), eps=1e-8)
-        print(f"[OPTIMIZER] Standard AdamW active (LR: {lr}).")
+        print(f"[OPTIMIZER] Standard AdamW active (LR: {lr}, Warmup: {warmup_steps}, GradAccum: {grad_accum_steps}).")
 
     time_str = f", Max Duration: {max_time/3600:.1f} hours" if max_time else ""
-    print(f"Finetuning model on {len(dataset):,} instruction pairs for {steps:,} steps (Replay ratio: {replay_ratio*100:.0f}%{time_str})...")
+    effective_batch = batch_size * grad_accum_steps
+    print(f"Finetuning model on {len(dataset):,} instruction pairs for {steps:,} steps (Effective batch: {effective_batch}, Replay ratio: {replay_ratio*100:.0f}%{time_str})...")
 
     rolling_loss = None
     best_loss = float("inf")
     start_time = time.time()
     last_step = 0
+    accum_count = 0
+    optimizer.zero_grad(set_to_none=True)
 
     for step in range(1, steps + 1):
         elapsed = time.time() - start_time
@@ -233,6 +244,22 @@ def finetune_instructions(
             print(f"\n[TIME LIMIT REACHED] Trained for {elapsed/3600:.2f} hours ({elapsed:.0f}s). Stopping gracefully at step {step-1}.")
             last_step = step - 1
             break
+
+        # Compute Cosine Decay with Linear Warmup learning rate factor
+        if step <= warmup_steps:
+            lr_mult = max(0.01, float(step) / float(warmup_steps))
+        else:
+            progress = float(step - warmup_steps) / float(max(1, steps - warmup_steps))
+            lr_mult = max(min_lr_ratio, min_lr_ratio + (1.0 - min_lr_ratio) * 0.5 * (1.0 + math.cos(math.pi * progress)))
+
+        # Update learning rates dynamically
+        if optimizer_type == "muon":
+            optimizer.muon_group["lr"] = muon_lr * lr_mult
+            for group in optimizer._adamw.param_groups:
+                group["lr"] = lr * lr_mult
+        else:
+            for group in optimizer.param_groups:
+                group["lr"] = lr * lr_mult
 
         x, y = dataset.sample_batch(batch_size, device=device)
         logits, _ = model(x)
@@ -243,19 +270,28 @@ def finetune_instructions(
         if torch.isnan(loss) or torch.isinf(loss):
             print(f"  [WARNING] NaN/Inf loss encountered at step {step}. Skipping step.")
             optimizer.zero_grad(set_to_none=True)
+            accum_count = 0
             continue
 
         if rolling_loss is not None and loss_val > 3.0 * rolling_loss:
             print(f"  [SPIKE GUARD] Loss spike ({loss_val:.4f} vs rolling {rolling_loss:.4f}) at step {step}. Skipping step.")
             optimizer.zero_grad(set_to_none=True)
+            accum_count = 0
             continue
 
         rolling_loss = loss_val if rolling_loss is None else 0.9 * rolling_loss + 0.1 * loss_val
 
-        optimizer.zero_grad(set_to_none=True)
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-        optimizer.step()
+        # Scale loss for gradient accumulation
+        scaled_loss = loss / grad_accum_steps
+        scaled_loss.backward()
+        accum_count += 1
+
+        if accum_count % grad_accum_steps == 0 or step == steps:
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            optimizer.step()
+            optimizer.zero_grad(set_to_none=True)
+            accum_count = 0
+
         last_step = step
 
         # Periodic status logging
@@ -266,7 +302,8 @@ def finetune_instructions(
             if max_time:
                 remaining_time = max(0.0, max_time - cur_elapsed)
                 eta_str = f" | Remaining: {remaining_time/60:.1f}m"
-            print(f"Finetune Step {step:5d}/{steps} | Loss: {loss.item():.4f} (Rolling: {rolling_loss:.4f}) | {rate:.2f} steps/s | Elapsed: {cur_elapsed/60:.1f}m{eta_str}", flush=True)
+            cur_lr = (muon_lr * lr_mult) if optimizer_type == "muon" else (lr * lr_mult)
+            print(f"Finetune Step {step:5d}/{steps} | Loss: {loss_val:.4f} (Rolling: {rolling_loss:.4f}) | LR: {cur_lr:.2e} | {rate:.2f} steps/s | Elapsed: {cur_elapsed/60:.1f}m{eta_str}", flush=True)
 
         # Save checkpoint periodically
         if step % save_interval == 0:

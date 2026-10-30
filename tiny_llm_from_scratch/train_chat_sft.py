@@ -13,10 +13,10 @@ from pathlib import Path
 import sys
 import time
 
-# Guard OpenBLAS threads on Windows CPU
-os.environ["OPENBLAS_NUM_THREADS"] = "4"
-os.environ["MKL_NUM_THREADS"] = "4"
-os.environ["OMP_NUM_THREADS"] = "4"
+# Guard OpenBLAS / MKL threads on Windows CPU (Qualcomm Oryon 8 cores)
+os.environ["OPENBLAS_NUM_THREADS"] = "8"
+os.environ["MKL_NUM_THREADS"] = "8"
+os.environ["OMP_NUM_THREADS"] = "8"
 
 # Safe UTF-8 console output
 if sys.platform == "win32":
@@ -50,6 +50,9 @@ def main():
     parser.add_argument("--save-interval", type=int, default=250, help="Checkpoint saving step interval")
     parser.add_argument("--optimizer", choices=["adamw", "muon"], default="muon", help="Optimizer choice (default: muon)")
     parser.add_argument("--muon-lr", type=float, default=0.01, help="Learning rate for Muon 2D orthogonal updates")
+    parser.add_argument("--grad-accum-steps", type=int, default=2, help="Gradient accumulation micro-steps (effective batch = batch_size * grad_accum_steps)")
+    parser.add_argument("--warmup-steps", type=int, default=500, help="Warmup steps for linear warmup cosine decay schedule")
+    parser.add_argument("--min-lr-ratio", type=float, default=0.1, help="Minimum learning rate ratio for cosine decay")
     parser.add_argument("--output", default="checkpoints/modern_chat_finetuned.pt", help="Output checkpoint file")
     parser.add_argument("--device", default="auto", help="Compute device: auto, cpu, cuda, or mps")
     args = parser.parse_args()
@@ -60,6 +63,14 @@ def main():
     else:
         device = args.device
     print(f"[DEVICE] Compute device: {device.upper()}")
+
+    if device == "cpu":
+        try:
+            torch.set_num_threads(8)
+            torch.set_num_interop_threads(2)
+            print(f"[THREADS] Configured PyTorch CPU parallelism: {torch.get_num_threads()} compute threads")
+        except Exception:
+            pass
 
     tok_path = PROJECT_ROOT / "tokenizer_bpe.json"
     if not tok_path.is_file():
@@ -129,6 +140,9 @@ def main():
         save_interval=args.save_interval,
         optimizer_type=args.optimizer,
         muon_lr=args.muon_lr,
+        grad_accum_steps=args.grad_accum_steps,
+        warmup_steps=args.warmup_steps,
+        min_lr_ratio=args.min_lr_ratio,
     )
     print(f"[SFT] Completed in {time.time() - t0:.2f}s. Saved to {out_p.name}")
 

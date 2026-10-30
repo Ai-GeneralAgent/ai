@@ -9,6 +9,7 @@ import re
 import urllib.error
 import urllib.parse
 import urllib.request
+import ssl
 from typing import Any, Dict, List, Optional, Tuple
 
 
@@ -121,7 +122,15 @@ class WebBrowserEngine:
                     "Accept-Language": "en-US,en;q=0.5",
                 },
             )
-            with urllib.request.urlopen(req, timeout=cls.DEFAULT_TIMEOUT_SEC) as resp:
+            ctx = ssl.create_default_context()
+            try:
+                import certifi
+                ctx.load_verify_locations(certifi.where())
+            except Exception:
+                ctx.check_hostname = False
+                ctx.verify_mode = ssl.CERT_NONE
+
+            with urllib.request.urlopen(req, timeout=cls.DEFAULT_TIMEOUT_SEC, context=ctx) as resp:
                 status_code = resp.getcode()
                 content_type = resp.headers.get("Content-Type", "")
                 charset = resp.headers.get_content_charset() or "utf-8"
@@ -215,3 +224,4 @@ class WebBrowserEngine:
             for l in links[:5]:
                 lines.append(f"  - [{l['text']}] -> {l['url']}")
         return "\n".join(lines)
+

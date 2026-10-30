@@ -176,6 +176,20 @@ class StaticCodeAuditor:
         return findings
 
     @classmethod
+    def audit_code(cls, code_string: str, filename: str = "<input>") -> Dict[str, Any]:
+        """Audits an in-memory code string safely and returns dictionary report."""
+        findings = cls.audit_python_code(code_string, filename=filename)
+        high_count = sum(1 for f in findings if f.severity == "HIGH")
+        med_count = sum(1 for f in findings if f.severity == "MEDIUM")
+        return {
+            "file": filename,
+            "total_findings": len(findings),
+            "high_severity": high_count,
+            "medium_severity": med_count,
+            "findings": [f.to_dict() for f in findings],
+        }
+
+    @classmethod
     def audit_file(cls, file_path: Path) -> Dict[str, Any]:
         """Audits a file from disk safely."""
         p = Path(file_path)
@@ -204,3 +218,4 @@ class StaticCodeAuditor:
             val = StaticCodeAuditor._get_call_name(node.value)
             return f"{val}.{node.attr}" if val else node.attr
         return ""
+
