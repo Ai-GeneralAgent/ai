@@ -89,3 +89,4 @@ for db_path in DB_FILES:
 print("\n" + "=" * 70)
 print("MEMORY SANITIZATION COMPLETE")
 print("=" * 70)
+

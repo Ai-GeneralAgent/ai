@@ -26,12 +26,20 @@ class BoundedAgentLoop:
         max_tool_calls: int = 8,
         timeout_sec: float = 15.0,
         allowed_tools: Optional[Any] = None,
+        bypass_security: bool = False,
     ):
         self.registry = registry
         self.max_iterations = max_iterations
         self.max_tool_calls = max_tool_calls
         self.timeout_sec = timeout_sec
         self.allowed_tools = set(allowed_tools) if allowed_tools is not None else None
+        self.bypass_security = bypass_security
+
+    def set_bypass_security(self, enabled: bool = True):
+        """Allows bypassing security allowlists for full capability testing."""
+        self.bypass_security = enabled
+        if self.registry:
+            self.registry.set_unrestricted_mode(enabled)
 
     def run_plan(self, task_goal: str, plan_steps: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Executes a structured task plan within bounds."""
@@ -63,8 +71,8 @@ class BoundedAgentLoop:
                 steps_executed.append(AgentStep(step_num=i, thought=thought))
                 continue
 
-            # Check session allowlist
-            if self.allowed_tools is not None and tool_name not in self.allowed_tools:
+            # Check session allowlist (unless in full capability bypass mode)
+            if not self.bypass_security and self.allowed_tools is not None and tool_name not in self.allowed_tools:
                 step_rec = AgentStep(
                     step_num=i,
                     thought=thought,

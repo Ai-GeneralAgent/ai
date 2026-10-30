@@ -148,6 +148,7 @@ def print_help():
     print(f"  {C.YELLOW}/weather <city>{C.RESET}      Get real-time global weather and conditions via Open-Meteo")
     print(f"  {C.YELLOW}/context [len]{C.RESET}       View or adjust 1M context window limit (1,048,576 tokens)")
     print(f"  {C.YELLOW}/artifacts{C.RESET}           Extract and render structured code/diagram cards")
+    print(f"  {C.YELLOW}/security [on|off]{C.RESET}   Toggle security & allowlists (bypass for full capability testing)")
     print(f"  {C.YELLOW}/think [on|off]{C.RESET}      Toggle internal reasoning traces")
     print(f"  {C.YELLOW}/stream [on|off]{C.RESET}     Toggle real-time streaming token generation")
     print(f"  {C.YELLOW}/rag [on|off]{C.RESET}        Enable/disable local RAG document retrieval")
@@ -172,7 +173,7 @@ def print_help():
 def launch_cli():
     parser = argparse.ArgumentParser(description="Modern Tiny LLM AI Assistant (v2.1.0)")
     parser.add_argument("--checkpoint", default=None, help="Path to model checkpoint")
-    parser.add_argument("--tokenizer", default="tokenizer_bpe.json")
+    parser.add_argument("--tokenizer", default=None, help="Path to tokenizer JSON")
     parser.add_argument("--device", default="auto", help="auto, cpu, cuda, or mps")
     parser.add_argument("--temperature", type=float, default=0.70)
     parser.add_argument("--top-p", type=float, default=0.90)
@@ -180,10 +181,16 @@ def launch_cli():
     parser.add_argument("--tokens", type=int, default=120)
     parser.add_argument("--rag", action="store_true", help="Start with RAG enabled")
     parser.add_argument("--think", action="store_true", default=True, help="Enable Chain-of-Thought thinking")
+    parser.add_argument("--unrestricted", action="store_true", help="Bypass security & allowlists to test full capability")
     args = parser.parse_args()
 
     project_root = Path(__file__).resolve().parent.parent.parent
-    tok_path = project_root / args.tokenizer
+    if args.tokenizer:
+        tok_path = project_root / args.tokenizer
+    elif (project_root / "tokenizer_bpe_v2.json").is_file():
+        tok_path = project_root / "tokenizer_bpe_v2.json"
+    else:
+        tok_path = project_root / "tokenizer_bpe.json"
     db_path = project_root / "memory.db"
 
     # Auto device resolution
@@ -211,6 +218,9 @@ def launch_cli():
     # Initialize Tools
     tools = ToolRegistry()
     register_builtin_tools(tools, project_root)
+    unrestricted_mode = bool(args.unrestricted)
+    if unrestricted_mode:
+        tools.set_unrestricted_mode(True)
 
     # Initialize RAG (Curriculum Textbooks, Math, Science, Philosophy, QA)
     rag = LocalRAGPipeline()
@@ -234,6 +244,8 @@ def launch_cli():
         tool_registry=tools,
         enable_thinking=args.think,
     )
+    if unrestricted_mode and hasattr(orchestrator, "agent_loop") and orchestrator.agent_loop:
+        orchestrator.agent_loop.set_bypass_security(True)
 
     # Find and Load Checkpoint
     active_ckpt_path = discover_best_checkpoint(project_root, args.checkpoint)
@@ -444,6 +456,28 @@ def launch_cli():
             else:
                 print(f"{C.WHITE}Active Mode:{C.RESET} {C.GREEN if current_mode == 'assistant-chat' else C.YELLOW}{current_mode.upper()}{C.RESET}")
                 print(f"{C.GRAY}Switch modes using: /mode chat OR /mode completion{C.RESET}")
+            continue
+
+        elif lead in ["/security", "/guard", "/fullcap"]:
+            if len(cmd) > 1:
+                target_state = cmd[1].lower().strip()
+                if target_state in ["off", "disable", "disabled", "bypass"]:
+                    unrestricted_mode = True
+                    tools.set_unrestricted_mode(True)
+                    if hasattr(orchestrator, "agent_loop") and orchestrator.agent_loop:
+                        orchestrator.agent_loop.set_bypass_security(True)
+                    print(f"{C.RED}{C.BOLD}[SECURITY & GUARDRAILS: DISABLED]{C.RESET} {C.YELLOW}Full capability testing mode active: all tools unlocked, allowlists bypassed.{C.RESET}")
+                elif target_state in ["on", "enable", "enabled"]:
+                    unrestricted_mode = False
+                    tools.set_unrestricted_mode(False)
+                    if hasattr(orchestrator, "agent_loop") and orchestrator.agent_loop:
+                        orchestrator.agent_loop.set_bypass_security(False)
+                    print(f"{C.GREEN}[SECURITY & GUARDRAILS: ENABLED]{C.RESET} Strict tool allowlists and sandboxing active.")
+                else:
+                    print(f"{C.RED}Usage: /security off  OR  /security on{C.RESET}")
+            else:
+                st = f"{C.RED}DISABLED (Full Capability Testing){C.RESET}" if unrestricted_mode else f"{C.GREEN}ENABLED (Strict Allowlists){C.RESET}"
+                print(f"{C.WHITE}Security & Guardrail Status:{C.RESET} {st}")
             continue
 
         elif lead == "/artifacts":

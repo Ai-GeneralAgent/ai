@@ -69,13 +69,20 @@ def load_llm_checkpoint(
 
     adapted = adapt_state_dict(raw_state)
 
-    if config is None:
+    if "model.embed_tokens.weight" in adapted:
+        ckpt_vocab_size, ckpt_hidden_size = adapted["model.embed_tokens.weight"].shape
+        if config is None:
+            if cfg_dict:
+                config = LLMConfig.from_dict(cfg_dict)
+            else:
+                config = LLMConfig(vocab_size=ckpt_vocab_size, hidden_size=ckpt_hidden_size)
+        elif config.vocab_size != ckpt_vocab_size:
+            config.vocab_size = ckpt_vocab_size
+    elif config is None:
         if cfg_dict:
             config = LLMConfig.from_dict(cfg_dict)
         else:
-            # Infer from weights
-            vocab_size, hidden_size = adapted["model.embed_tokens.weight"].shape
-            config = LLMConfig(vocab_size=vocab_size, hidden_size=hidden_size)
+            config = LLMConfig()
 
     model = LLMForCausalLM(config).to(device)
     model.load_state_dict(adapted, strict=False)

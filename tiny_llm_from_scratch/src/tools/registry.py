@@ -16,10 +16,15 @@ class ToolDefinition:
 class ToolRegistry:
     """Type-safe registry of tools with argument validation, strict allowlist, and permission controls."""
 
-    def __init__(self, allowlist: Optional[Iterable[str]] = None):
+    def __init__(self, allowlist: Optional[Iterable[str]] = None, unrestricted_mode: bool = False):
         self.tools: Dict[str, ToolDefinition] = {}
         self.execution_log: List[Dict[str, Any]] = []
         self.allowlist: Optional[Set[str]] = set(allowlist) if allowlist is not None else None
+        self.unrestricted_mode: bool = unrestricted_mode
+
+    def set_unrestricted_mode(self, enabled: bool = True):
+        """Toggles unrestricted mode for full capability testing (bypasses allowlist and approval locks)."""
+        self.unrestricted_mode = enabled
 
     def register(self, tool: ToolDefinition):
         self.tools[tool.name] = tool
@@ -37,16 +42,16 @@ class ToolRegistry:
                 "name": t.name,
                 "description": t.description,
                 "parameters": t.parameters,
-                "requires_approval": t.requires_approval,
+                "requires_approval": t.requires_approval and not self.unrestricted_mode,
             }
             for t in self.tools.values()
-            if self.allowlist is None or t.name in self.allowlist
+            if self.unrestricted_mode or self.allowlist is None or t.name in self.allowlist
         ]
 
     def execute(self, name: str, arguments: Dict[str, Any], user_approved: bool = False) -> Dict[str, Any]:
         """Validates allowlist, parameters, checks permissions, and executes tool safely."""
-        # 1. Enforce strict allowlist policy
-        if self.allowlist is not None and name not in self.allowlist:
+        # 1. Enforce strict allowlist policy (unless in unrestricted full capability mode)
+        if not self.unrestricted_mode and self.allowlist is not None and name not in self.allowlist:
             log_entry = {
                 "tool": name,
                 "arguments": arguments,
@@ -66,8 +71,8 @@ class ToolRegistry:
         if not tool:
             return {"success": False, "error": f"Tool '{name}' is not registered."}
 
-        # 3. Check explicit approval requirements
-        if tool.requires_approval and not user_approved:
+        # 3. Check explicit approval requirements (bypassed in unrestricted mode)
+        if not self.unrestricted_mode and tool.requires_approval and not user_approved:
             return {
                 "success": False,
                 "error": f"Action requires explicit user approval before execution.",

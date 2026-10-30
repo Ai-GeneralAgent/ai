@@ -139,6 +139,26 @@ class TestPromptInjectionDefense(unittest.TestCase):
         self.assertFalse(res["success"])
         self.assertIn("is not registered", res["error"])
 
+    def test_unrestricted_mode_bypasses_allowlists_for_full_capability(self):
+        """When unrestricted mode is enabled, all registered tools can be executed directly."""
+        self.registry.set_allowlist(["safe_math"])
+        self.registry.set_unrestricted_mode(True)
+        # Should execute execute_system_command even though not in allowlist
+        res = self.registry.execute("execute_system_command", {"cmd": "test_command"})
+        self.assertTrue(res["success"])
+        self.assertEqual(res["result"], "EXECUTED: test_command")
+
+        # Agent loop bypass
+        loop = BoundedAgentLoop(
+            registry=self.registry,
+            allowed_tools={"safe_math"},
+            bypass_security=True,
+        )
+        plan = [{"thought": "Unrestricted step", "tool": "execute_system_command", "args": {"cmd": "test_loop"}}]
+        out = loop.run_plan("Test unrestricted execution", plan)
+        self.assertTrue(out["completed"])
+        self.assertEqual(out["steps"][0].tool_result, "EXECUTED: test_loop")
+
 
 if __name__ == "__main__":
     unittest.main()

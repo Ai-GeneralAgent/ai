@@ -336,6 +336,7 @@ def promote_checkpoint(
     held_out_path: Path,
     benchmark_record_path: Path = PROJECT_ROOT / "eval" / "gate_benchmark.json",
     device: str = "cpu",
+    bypass_gate: bool = False,
 ) -> bool:
     """
     Evaluates candidate checkpoint against the established benchmark.
@@ -343,11 +344,14 @@ def promote_checkpoint(
       1. Sycophancy rate does not increase.
       2. Held-out score does not regress.
       3. Total composite score is improved or equal.
+    If bypass_gate=True, logs warnings but forces promotion for full capability testing.
     """
     print("\n" + "#" * 70)
     print("CHECKPOINT PROMOTION GATE VERIFICATION")
     print(f"Candidate: {candidate_ckpt}")
     print(f"Target:    {target_ckpt}")
+    if bypass_gate:
+        print("[MODE] BYPASS GATE ENABLED (Full Capability Testing)")
     print("#" * 70)
 
     candidate_results = run_evaluation_gate(
@@ -395,13 +399,21 @@ def promote_checkpoint(
             )
 
     if reasons_for_rejection:
-        print("\n" + "!" * 70)
-        print("[GATE REJECTED] Checkpoint failed promotion criteria:")
-        for r in reasons_for_rejection:
-            print(f"  [X] {r}")
-        print("Candidate checkpoint will NOT replace target checkpoint.")
-        print("!" * 70)
-        return False
+        if bypass_gate:
+            print("\n" + "!" * 70)
+            print("[GATE BYPASSED] Gate criteria not met, but bypass_gate=True enabled:")
+            for r in reasons_for_rejection:
+                print(f"  [!] {r}")
+            print("[OVERRIDE] Forcing promotion to target for full capability testing.")
+            print("!" * 70)
+        else:
+            print("\n" + "!" * 70)
+            print("[GATE REJECTED] Checkpoint failed promotion criteria:")
+            for r in reasons_for_rejection:
+                print(f"  [X] {r}")
+            print("Candidate checkpoint will NOT replace target checkpoint.")
+            print("!" * 70)
+            return False
 
     print("\n" + "=" * 70)
     print("[GATE PASSED] Candidate meets or exceeds all safety and quality metrics!")
@@ -434,6 +446,7 @@ def main():
     parser.add_argument("--tokenizer", type=Path, default=PROJECT_ROOT / "tokenizer_bpe_v2.json")
     parser.add_argument("--held-out", type=Path, default=PROJECT_ROOT / "eval" / "private" / "held_out_qa.jsonl")
     parser.add_argument("--promote", action="store_true", help="Attempt promotion to target if gate passes")
+    parser.add_argument("--bypass-gate", action="store_true", help="Bypass safety & sycophancy gate to test full capability")
     parser.add_argument("--device", type=str, default="cpu")
     args = parser.parse_args()
 
@@ -443,13 +456,14 @@ def main():
         if alt_tok.is_file():
             args.tokenizer = alt_tok
 
-    if args.promote:
+    if args.promote or args.bypass_gate:
         promote_checkpoint(
             candidate_ckpt=args.candidate,
             target_ckpt=args.target,
             tokenizer_path=args.tokenizer,
             held_out_path=args.held_out,
             device=args.device,
+            bypass_gate=args.bypass_gate,
         )
     else:
         run_evaluation_gate(
