@@ -22,11 +22,11 @@ class RMSNorm(nn.Module):
 class KVCache:
     """
     Key-Value cache enabling O(1) step complexity during autoregressive generation.
-    Supports 1,048,576 (1M) context windows, StreamingLLM attention sinks, and sliding windows.
+    Supports 2,097,152 (2M) context windows, StreamingLLM attention sinks, and sliding windows.
     """
     def __init__(
         self,
-        max_capacity: int = 1_048_576,
+        max_capacity: int = 2_097_152,
         window_size: Optional[int] = None,
         sink_size: int = 4,
     ):
@@ -75,7 +75,7 @@ def precompute_rope_freqs(
     Precomputes complex exponential frequencies for RoPE with support for:
     - Linear scaling (Chen et al., 2023)
     - Dynamic NTK-aware scaling (bloc97, 2023)
-    - YaRN (Yet another RoPE extensioN, Peng et al., 2023) up to 1,048,576 (1M) context.
+    - YaRN (Yet another RoPE extensioN, Peng et al., 2023) up to 2,097,152 (2M) context.
     """
     if scaling_type in ["yarn", "dynamic_ntk"] and max_seq_len > original_max_len:
         ratio = max(1.0, float(max_seq_len) / float(original_max_len))
@@ -245,7 +245,7 @@ class ModernTransformer(nn.Module):
         else:
             self.extra_heads = None
 
-        self.max_seq_len = getattr(config, "max_seq_len", 1_048_576)
+        self.max_seq_len = getattr(config, "max_seq_len", 2_097_152)
         if config.pos_emb == "rope":
             init_len = min(1024, max(config.block_size, 256))
             freqs_cis = precompute_rope_freqs(
@@ -276,18 +276,18 @@ class ModernTransformer(nn.Module):
         window_size: Optional[int] = None,
         sink_size: Optional[int] = None,
     ) -> List[KVCache]:
-        """Creates Key-Value caches supporting 1M tokens, StreamingLLM attention sinks, and sliding windows."""
+        """Creates Key-Value caches supporting 2M tokens, StreamingLLM attention sinks, and sliding windows."""
         w = window_size if window_size is not None else getattr(self.config, "sliding_window", None)
         s = sink_size if sink_size is not None else getattr(self.config, "sink_tokens", 4)
-        max_cap = getattr(self.config, "max_seq_len", 1_048_576)
+        max_cap = getattr(self.config, "max_seq_len", 2_097_152)
         return [KVCache(max_capacity=max_cap, window_size=w, sink_size=s) for _ in range(self.config.n_layer)]
 
     def get_freqs_cis(self, total_len: int, device: torch.device) -> Optional[torch.Tensor]:
         if self.config.pos_emb != "rope":
             return None
-        # Dynamic context extrapolation up to 1,048,576 tokens
+        # Dynamic context extrapolation up to 2,097,152 tokens
         if self.freqs_cis is None or self.freqs_cis.shape[0] < total_len:
-            max_limit = getattr(self.config, "max_seq_len", 1_048_576)
+            max_limit = getattr(self.config, "max_seq_len", 2_097_152)
             target_len = min(max_limit, max(total_len, self.config.block_size))
             scale = getattr(self.config, "rope_scaling_factor", 1.0)
             scaling_type = getattr(self.config, "rope_scaling_type", "yarn")
@@ -311,7 +311,7 @@ class ModernTransformer(nn.Module):
         curriculum_k: int = 1,
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         B, T = idx.shape
-        max_limit = getattr(self.config, "max_seq_len", 1_048_576)
+        max_limit = getattr(self.config, "max_seq_len", 2_097_152)
         if start_pos + T > max_limit:
             raise ValueError(f"Sequence position {start_pos + T} exceeds max allowed capacity {max_limit}")
 

@@ -186,3 +186,4 @@ class ProjectCodeAnalyzer:
             elif isinstance(child, ast.BoolOp):
                 complexity += len(child.values) - 1
         return complexity
+

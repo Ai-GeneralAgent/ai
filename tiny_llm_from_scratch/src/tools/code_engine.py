@@ -134,6 +134,21 @@ class CodingAssistant:
         """Synthesizes verified Python solutions for common algorithmic, data structure, or utility tasks."""
         lower = query.lower().strip()
 
+        # 0. Hello World
+        if "hello world" in lower or ("hello" in lower and "world" in lower):
+            code = (
+                "# Python Hello World Program\n"
+                "def main():\n"
+                "    print('Hello, World!')\n\n"
+                "if __name__ == '__main__':\n"
+                "    main()\n"
+            )
+            return {
+                "task": "Hello World Program",
+                "code": code,
+                "explanation": "Defines a clean Python program that outputs 'Hello, World!' to the console.",
+            }
+
         # 1. Add two numbers
         if any(k in lower for k in ["add two numbers", "adds two numbers", "addition of two numbers", "sum of two numbers"]):
             code = (

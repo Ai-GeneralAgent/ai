@@ -1,0 +1,16 @@
+{
+  "timestamp": "2026-10-30 00:44:13",
+  "corpus_file": "D:\\tiny_llm_from_scratch\\tiny_llm_from_scratch\\data_master_v3_unified.txt",
+  "size_mb": 348.43,
+  "total_documents": 101752,
+  "total_characters": 352461244,
+  "domains": {
+    "existing_master": 1,
+    "qa_10k": 10000,
+    "literature": 4419,
+    "curriculum": 12869,
+    "reasoning_slimorca": 14817,
+    "agentic_coding": 9974,
+    "conversations_dolly": 49672
+  }
+}

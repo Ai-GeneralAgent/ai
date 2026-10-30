@@ -21,7 +21,7 @@ class ModelConfig:
     tie_weights: bool = True
     init_std: float = 0.02
     rope_theta: float = 10000.0
-    max_seq_len: int = 1_048_576          # 1M token extended context window limit (1,048,576 tokens)
+    max_seq_len: int = 2_097_152          # 2M token extended context window limit (2,097,152 tokens)
     rope_scaling_type: str = "yarn"       # "yarn", "dynamic_ntk", or "linear"
     rope_scaling_factor: float = 1.0      # RoPE frequency scaling factor
     sliding_window: Optional[int] = None  # Optional sliding window size for StreamingLLM
@@ -119,6 +119,29 @@ class ModelConfig:
             sliding_window=4096,
             sink_tokens=4,
             chunk_size=512,
+            tie_weights=True,
+            arch_version="2.2.0",
+        )
+
+    @classmethod
+    def preset_2m(cls, vocab_size: int = 10000) -> "ModelConfig":
+        """Configuration tuned for ultra-long 2,097,152 (2M) context with YaRN RoPE."""
+        return cls(
+            vocab_size=vocab_size,
+            block_size=256,
+            max_seq_len=2_097_152,
+            n_embd=192,
+            n_head=4,
+            n_layer=3,
+            norm_type="rmsnorm",
+            pos_emb="rope",
+            ffn_type="swiglu",
+            rope_scaling_type="yarn",
+            rope_theta=2_000_000.0,
+            rope_scaling_factor=8192.0,
+            sliding_window=8192,
+            sink_tokens=4,
+            chunk_size=1024,
             tie_weights=True,
             arch_version="2.2.0",
         )

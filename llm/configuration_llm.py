@@ -49,6 +49,22 @@ class LLMConfig:
         )
 
     @classmethod
+    def preset_2m(cls, vocab_size: int = 10000) -> "LLMConfig":
+        """2M context window configuration (2,097,152 tokens) with extended RoPE."""
+        return cls(
+            vocab_size=vocab_size,
+            hidden_size=192,
+            intermediate_size=512,
+            num_hidden_layers=3,
+            num_attention_heads=4,
+            num_key_value_heads=4,
+            head_dim=48,
+            max_position_embeddings=2_097_152,
+            rope_theta=2_000_000.0,
+            tie_word_embeddings=True,
+        )
+
+    @classmethod
     def preset_25m(cls, vocab_size: int = 8000) -> "LLMConfig":
         """25M parameter model configuration (8 layers, width 512, 8 heads, vocab 8000)."""
         return cls(

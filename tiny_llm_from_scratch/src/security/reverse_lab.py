@@ -146,3 +146,4 @@ class ReverseEngineeringToolkit:
         return {
             "error": f"Unknown convention '{convention_name}'. Available: {list(cls.CALLING_CONVENTIONS.keys())}"
         }
+

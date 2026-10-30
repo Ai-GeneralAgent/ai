@@ -84,6 +84,47 @@ class AutonomousWorkAgent:
                 "args": {"url": target_url, "max_chars": 4000},
             })
 
+        # 1b. GitHub & Git Goal
+        elif any(k in lower for k in ["github", "gh ", "repo", "git ", "commit", "pull request", "branch"]):
+            if any(k in lower for k in ["status", "diff", "modified", "uncommitted"]):
+                plan_steps.append({
+                    "thought": "Inspect local repository Git status and changed files",
+                    "tool": "git_local_status",
+                    "args": {},
+                })
+                plan_steps.append({
+                    "thought": "Generate Git diff of working tree changes",
+                    "tool": "git_local_diff",
+                    "args": {"max_lines": 80},
+                })
+            elif any(k in lower for k in ["log", "history", "recent commits"]):
+                plan_steps.append({
+                    "thought": "Retrieve local Git commit history",
+                    "tool": "git_local_log",
+                    "args": {"limit": 5},
+                })
+            elif "/" in goal and not any(w in lower for w in ["search", "find"]):
+                # Probable owner/repo query
+                parts = [p for p in goal.split() if "/" in p and not p.startswith("http")]
+                repo_name = parts[0].strip() if parts else "microsoft/vscode"
+                plan_steps.append({
+                    "thought": f"Query GitHub repository metadata for {repo_name}",
+                    "tool": "github_get_repo",
+                    "args": {"repo": repo_name},
+                })
+                plan_steps.append({
+                    "thought": f"List open issues for {repo_name}",
+                    "tool": "github_list_issues",
+                    "args": {"repo": repo_name, "limit": 4},
+                })
+            else:
+                clean_q = re.sub(r"(?i)(search|github|find|repos?|for)\s*", "", goal).strip() or goal
+                plan_steps.append({
+                    "thought": f"Search GitHub repositories for '{clean_q}'",
+                    "tool": "github_search_repos",
+                    "args": {"query": clean_q, "limit": 5},
+                })
+
         # 2. Web Search & Research Goal
         elif any(k in lower for k in ["search", "find", "browse", "research", "lookup", "who is", "what is", "latest"]):
             clean_query = goal
@@ -191,3 +232,4 @@ class AutonomousWorkAgent:
             artifacts=artifacts,
             errors=errors,
         )
+
