@@ -24,9 +24,17 @@ class BackendInfo:
 
 
 class OllamaClient:
-    """Safe, non-intrusive client for local Ollama server."""
+    """Safe, non-intrusive client for local Ollama server running strictly on D: drive."""
 
-    def __init__(self, host: str = "http://localhost:11434"):
+    @staticmethod
+    def get_d_drive_binary() -> Optional[Path]:
+        """Locates the Ollama executable strictly on D: drive."""
+        for cand in [Path("D:/ollama/ollama.exe"), Path("D:/tools/ollama/ollama.exe"), Path("D:/ollama_models/../ollama.exe")]:
+            if cand.is_file():
+                return cand.resolve()
+        return None
+
+    def __init__(self, host: str = "http://127.0.0.1:11434"):
         self.host = host.rstrip("/")
 
     def is_server_running(self) -> bool:
