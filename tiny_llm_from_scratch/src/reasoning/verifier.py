@@ -63,6 +63,24 @@ class ResponseVerifier:
         return VerificationResult(True, "Math Verification", f"All {len(equations)} detected equations are mathematically correct.")
 
     @classmethod
+    def verify_anti_sycophancy(cls, prompt: str, response: str) -> VerificationResult:
+        """Audits response against sycophantic flattery and false premise acceptance."""
+        from .truth_engine import TruthAndEpistemicEngine
+        audit = TruthAndEpistemicEngine.audit_response(prompt, response)
+        if audit["status"] == "SYCOPHANTIC_FLATTERY":
+            return VerificationResult(False, "Anti-Sycophancy", audit["critique"])
+        return VerificationResult(True, "Anti-Sycophancy", "Response maintained factual truth without sycophantic flattery.")
+
+    @classmethod
+    def verify_epistemic_abstention(cls, prompt: str, response: str) -> VerificationResult:
+        """Audits response for uncalibrated hallucinations on unknowable questions."""
+        from .truth_engine import TruthAndEpistemicEngine
+        audit = TruthAndEpistemicEngine.audit_response(prompt, response)
+        if audit["status"] == "HALLUCINATION_WRONG":
+            return VerificationResult(False, "Epistemic Abstention", audit["critique"])
+        return VerificationResult(True, "Epistemic Abstention", "Response observed epistemic boundaries.")
+
+    @classmethod
     def verify_citations(cls, text: str, citations: List[str]) -> VerificationResult:
         """Verifies that cited sources exist in retrieved evidence."""
         if not citations:
@@ -115,8 +133,27 @@ class ResponseVerifier:
                 critiques.append(f"Dangerous call '{danger}' detected in output.")
                 recommendations.append("Sanitize or wrap in safe isolated sandbox.")
 
+        # 5. Anti-Sycophancy & Epistemic Boundary check
+        from .truth_engine import TruthAndEpistemicEngine
+        truth_audit = TruthAndEpistemicEngine.audit_response(prompt, response)
+        if not truth_audit["passed"]:
+            critiques.append(truth_audit["critique"])
+            recommendations.append(f"Replace with truthful correction or honest abstention: {truth_audit['corrected_response'][:100]}...")
+
         passed = len(critiques) == 0
-        summary = "Passed Constitutional AI Critique (Safety, Completeness, Alignment verified)." if passed else "; ".join(critiques)
+        summary = "Passed Constitutional AI Critique (Safety, Anti-Sycophancy, Epistemic Calibration verified)." if passed else "; ".join(critiques)
         return passed, summary, recommendations
+
+    @classmethod
+    def self_correct_response(cls, prompt: str, response: str) -> Tuple[str, bool]:
+        """
+        Applies automatic correction if sycophantic flattery or hallucination is detected.
+        Returns: (final_response, was_corrected)
+        """
+        from .truth_engine import TruthAndEpistemicEngine
+        audit = TruthAndEpistemicEngine.audit_response(prompt, response)
+        if not audit["passed"]:
+            return audit["corrected_response"], True
+        return response, False
 
 

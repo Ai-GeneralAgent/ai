@@ -244,6 +244,13 @@ class ReasoningOrchestrator:
         ]):
             return "insufficient-knowledge"
 
+        # 19. Anti-Sycophancy & Epistemic Traps
+        from .truth_engine import TruthAndEpistemicEngine
+        if TruthAndEpistemicEngine.detect_sycophancy_trap(prompt):
+            return "sycophancy-trap"
+        if TruthAndEpistemicEngine.detect_unknowable_query(prompt):
+            return "insufficient-knowledge"
+
         return "general"
 
     def estimate_complexity(self, prompt: str, intent: str) -> str:
@@ -634,14 +641,42 @@ class ReasoningOrchestrator:
             )
             return prep
 
-        # 9. Insufficient / Unanswerable Knowledge
+        # 9. Sycophancy Trap Dispatcher (Anti-Flattery & Truth Preservation)
+        if intent == "sycophancy-trap":
+            from .truth_engine import TruthAndEpistemicEngine
+            trap_info = TruthAndEpistemicEngine.detect_sycophancy_trap(user_prompt)
+            if trap_info:
+                thinking_steps.append("3. Anti-Sycophancy Verification: User prompt asserts false premise or seeks flattering validation.")
+                thinking_steps.append(f"4. Truth Invariant Grounding: Ground truth verified as '{trap_info['truth']}'.")
+                thinking_steps.append("5. Non-Sycophantic Refutation: Formulating firm, polite, factual correction without flattery.")
+                prep.thinking = "\n".join(thinking_steps)
+                prep.direct_answer = TruthAndEpistemicEngine.generate_truthful_correction(trap_info)
+                prep.verifications.append({
+                    "check": "Anti-Sycophancy Verification",
+                    "passed": True,
+                    "details": f"Refuted false assertion. Stated truth: {trap_info['truth']}",
+                })
+                return prep
+
+        # 9b. Insufficient / Unanswerable Knowledge (Anti-Hallucination & Honest Abstention)
         if intent == "insufficient-knowledge":
-            thinking_steps.append("3. Epistemic Verification: Request addresses an unknowable, fictional, or unverifiable claim.")
+            from .truth_engine import TruthAndEpistemicEngine
+            unknowable = TruthAndEpistemicEngine.detect_unknowable_query(user_prompt)
+            thinking_steps.append("3. Epistemic Calibration: Request addresses an unknowable, unrecorded, stochastic, or private fact.")
+            thinking_steps.append("4. Anti-Hallucination Guard: Rejecting speculation and confabulation; stating epistemic limitation honestly.")
             prep.thinking = "\n".join(thinking_steps)
-            prep.direct_answer = (
-                "I do not have sufficient information in my knowledge base or verified retrieved sources to establish that. "
-                "Because this information is unverified or outside known records, I prefer to state this limitation honestly rather than invent an answer."
-            )
+            if unknowable:
+                prep.direct_answer = TruthAndEpistemicEngine.generate_honest_abstention(unknowable)
+            else:
+                prep.direct_answer = (
+                    "I do not have sufficient information in my knowledge base or verified retrieved sources to establish that. "
+                    "Because this information is unverified or outside known records, I prefer to state this limitation honestly rather than invent an answer."
+                )
+            prep.verifications.append({
+                "check": "Epistemic Abstention Verification",
+                "passed": True,
+                "details": "Honest abstention without hallucination.",
+            })
             return prep
 
         # 10. RAG Knowledge Retrieval
