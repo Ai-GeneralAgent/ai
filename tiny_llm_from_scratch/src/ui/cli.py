@@ -480,6 +480,101 @@ def launch_cli():
                 print(f"{C.WHITE}Security & Guardrail Status:{C.RESET} {st}")
             continue
 
+        elif lead == "/profile":
+            from ..research.profiles import ResearchProfile, PROFILES
+            profiles_list = list(ResearchProfile)
+            if len(cmd) > 1:
+                arg = " ".join(user_input.split()[1:])
+                try:
+                    defn = orchestrator.research_manager.set_profile_by_name(arg)
+                    print(f"\n{C.GREEN}{C.BOLD}=== [PROFILE ACTIVATED: {defn.title.upper()}] ==={C.RESET}")
+                    print(f"  {C.WHITE}Scope:{C.RESET}        {defn.scope}")
+                    print(f"  {C.WHITE}Boundary:{C.RESET}     {defn.safety_boundary}")
+                    print(f"  {C.WHITE}Capabilities:{C.RESET} {', '.join(defn.capabilities[:3])}...\n")
+                except Exception as e:
+                    print(f"{C.RED}Error switching profile: {e}{C.RESET}")
+            else:
+                cur = orchestrator.research_manager.get_active_definition()
+                print(f"\n{C.CYAN}{C.BOLD}--- ACTIVE RESEARCH PROFILE ---{C.RESET}")
+                print(f"  {C.GREEN}{cur.title}{C.RESET}: {cur.description}")
+                print(f"  {C.WHITE}Scope:{C.RESET}    {cur.scope}")
+                print(f"\n{C.YELLOW}Available Execution Profiles:{C.RESET}")
+                for i, p in enumerate(profiles_list, 1):
+                    marker = f"{C.GREEN}* (ACTIVE){C.RESET}" if p == cur.profile else ""
+                    print(f"  [{i}] {p.value:30} {marker}")
+                print(f"{C.GRAY}Switch profiles using: /profile <1-8> or /profile <name>{C.RESET}\n")
+            continue
+
+        elif lead == "/audit":
+            audit_path = " ".join(user_input.split()[1:]).strip()
+            if not audit_path:
+                print(f"{C.RED}Usage: /audit <relative_path_to_code_file>{C.RESET}")
+            else:
+                from ..security.code_audit import StaticCodeAuditor
+                target_file = project_root / audit_path
+                res = StaticCodeAuditor.audit_file(target_file)
+                if "error" in res:
+                    print(f"{C.RED}Audit error: {res['error']}{C.RESET}")
+                else:
+                    print(f"\n{C.CYAN}{C.BOLD}=== STATIC SECURITY AUDIT REPORT ==={C.RESET}")
+                    print(f"File: {res['file']} | Total findings: {res['total_findings']} (High: {res['high_severity']}, Med: {res['medium_severity']})")
+                    for f in res["findings"]:
+                        col = C.RED if f["severity"] == "HIGH" else C.YELLOW
+                        print(f"  {col}[{f['severity']}]{C.RESET} Line {f['line_number']} [{f['rule_id']}]: {f['message']}")
+                        print(f"    {C.GRAY}Snippet:{C.RESET} {f['code_snippet']}")
+                        print(f"    {C.GREEN}Fix:{C.RESET} {f['recommendation']}\n")
+            continue
+
+        elif lead == "/malware":
+            inspect_path = " ".join(user_input.split()[1:]).strip()
+            if not inspect_path:
+                print(f"{C.RED}Usage: /malware <relative_path_to_file>{C.RESET}")
+            else:
+                from ..security.malware_lab import MalwareStaticAnalyzer
+                target_file = project_root / inspect_path
+                try:
+                    rep = MalwareStaticAnalyzer.analyze_file(target_file)
+                    print(f"\n{C.CYAN}{C.BOLD}=== MALWARE STATIC TRIAGE REPORT ==={C.RESET}")
+                    print(f"  File: {rep.file_name} ({rep.file_size_bytes:,} bytes)")
+                    print(f"  Format: {rep.format_identification}")
+                    print(f"  SHA-256: {rep.sha256}")
+                    print(f"  MD5:     {rep.md5}")
+                    col = C.RED if rep.is_likely_packed else C.GREEN
+                    print(f"  Entropy: {col}{rep.entropy:.4f} bits/byte (Likely packed/encrypted: {rep.is_likely_packed}){C.RESET}")
+                    print(f"  Extracted Strings: {len(rep.interesting_strings)} unique items")
+                    print(f"\n{C.YELLOW}Suggested YARA Rule:{C.RESET}\n{rep.suggested_yara_rule}\n")
+                except Exception as e:
+                    print(f"{C.RED}Analysis error: {e}{C.RESET}")
+            continue
+
+        elif lead == "/lab":
+            lab_args = user_input.split()[1:]
+            if not lab_args:
+                print(f"{C.RED}Usage: /lab sqli <payload>  OR  /lab xss <payload>{C.RESET}")
+            else:
+                sub_exp = lab_args[0].lower()
+                payload = " ".join(lab_args[1:])
+                from ..security.lab import IsolatedSecurityLab
+                lab = IsolatedSecurityLab()
+                try:
+                    if sub_exp == "sqli":
+                        res = lab.test_sql_injection_mitigation(payload or "admin' OR '1'='1")
+                    elif sub_exp == "xss":
+                        res = lab.test_xss_sanitization_mitigation(payload or "<script>alert(1)</script>")
+                    else:
+                        print(f"{C.RED}Unknown experiment '{sub_exp}'. Options: sqli, xss{C.RESET}")
+                        continue
+                    print(f"\n{C.CYAN}{C.BOLD}=== ISOLATED SECURITY LAB EXPERIMENT ==={C.RESET}")
+                    print(f"Target:       {res.target}")
+                    print(f"Type:         {res.vulnerability_type}")
+                    print(f"Vulnerable:   {C.RED if res.is_vulnerable_before else C.GREEN}{res.is_vulnerable_before}{C.RESET}")
+                    print(f"Mitigated:    {C.GREEN}{res.is_mitigated_after}{C.RESET}")
+                    print(f"\n{C.WHITE}Evidence:{C.RESET}\n{res.evidence}")
+                    print(f"\n{C.GREEN}Remediation Guidance:{C.RESET}\n{res.remediation_guidance}\n")
+                except Exception as e:
+                    print(f"{C.RED}Lab execution error: {e}{C.RESET}")
+            continue
+
         elif lead == "/artifacts":
             from ..generation.artifacts import ArtifactEngine
             arts = ArtifactEngine.extract_artifacts(last_response)

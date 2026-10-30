@@ -32,4 +32,5 @@ tiny_llm_from_scratch/data_curriculum/
 tiny_llm_from_scratch/training_data/curriculum_textbooks/
 tiny_llm_from_scratch/training_data/classic_literature/
 tiny_llm_from_scratch/training_data/reasoning_sft/
+*.jsonl
 

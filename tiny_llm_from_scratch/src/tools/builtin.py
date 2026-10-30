@@ -529,3 +529,85 @@ def register_builtin_tools(registry: ToolRegistry, project_root: Path = Path("."
             __import__("src.tools.free_tools", fromlist=["WeatherEngine"]).WeatherEngine.get_weather(city)
         ),
     ))
+
+    # --- ADVANCED RESEARCH & CYBERSECURITY TOOLS ---
+    registry.register(ToolDefinition(
+        name="static_code_audit",
+        description="Audits Python source code string for vulnerabilities (command injection, eval, SQLi, deserialization, secrets).",
+        parameters={"code": "python code string to audit"},
+        execute_fn=lambda code: [f.to_dict() for f in __import__("src.security.code_audit", fromlist=["StaticCodeAuditor"]).StaticCodeAuditor.audit_python_code(code)],
+    ))
+
+    registry.register(ToolDefinition(
+        name="audit_code_file",
+        description="Performs AST security audit on a local code file in the project.",
+        parameters={"relative_path": "path relative to project root"},
+        execute_fn=lambda relative_path: __import__("src.security.code_audit", fromlist=["StaticCodeAuditor"]).StaticCodeAuditor.audit_file(project_root / relative_path),
+    ))
+
+    registry.register(ToolDefinition(
+        name="malware_static_inspect",
+        description="Performs safe non-executing static analysis of a file (MD5, SHA256, Shannon entropy, strings, headers).",
+        parameters={"relative_path": "path relative to project root"},
+        execute_fn=lambda relative_path: __import__("src.security.malware_lab", fromlist=["MalwareStaticAnalyzer"]).MalwareStaticAnalyzer.analyze_file(project_root / relative_path).to_dict(),
+    ))
+
+    registry.register(ToolDefinition(
+        name="ioc_extract",
+        description="Extracts indicators of compromise (IPv4, domains, URLs, hashes) from text or reports.",
+        parameters={"text": "text containing potential IOCs"},
+        execute_fn=lambda text: __import__("src.security.malware_lab", fromlist=["MalwareStaticAnalyzer"]).MalwareStaticAnalyzer.extract_iocs(text),
+    ))
+
+    registry.register(ToolDefinition(
+        name="yara_rule_generate",
+        description="Generates defensive YARA detection rule template from a sample name, sha256 hash, and key strings.",
+        parameters={"rule_name": "name of rule", "sha256": "file sha256 hash", "sample_strings": "comma-separated strings"},
+        execute_fn=lambda rule_name, sha256, sample_strings: __import__("src.security.malware_lab", fromlist=["MalwareStaticAnalyzer"]).MalwareStaticAnalyzer.generate_yara_rule(
+            rule_name=rule_name,
+            hashes={"sha256": sha256},
+            strings=[s.strip() for s in sample_strings.split(",") if s.strip()]
+        ),
+    ))
+
+    registry.register(ToolDefinition(
+        name="disassemble_bytecode",
+        description="Disassembles Python code snippet into bytecode instructions.",
+        parameters={"code": "python code snippet"},
+        execute_fn=lambda code: __import__("src.security.reverse_lab", fromlist=["ReverseEngineeringToolkit"]).ReverseEngineeringToolkit.disassemble_python_code(code),
+    ))
+
+    registry.register(ToolDefinition(
+        name="explain_calling_convention",
+        description="Provides ABI register mapping and stack frame breakdown for calling conventions (x64_windows_fastcall, system_v_x64, cdecl_x86).",
+        parameters={"convention": "convention name (e.g. x64_windows_fastcall)"},
+        execute_fn=lambda convention: __import__("src.security.reverse_lab", fromlist=["ReverseEngineeringToolkit"]).ReverseEngineeringToolkit.explain_calling_convention(convention),
+    ))
+
+    registry.register(ToolDefinition(
+        name="security_lab_sqli",
+        description="Demonstrates SQL injection reproduction and parameterized query mitigation in isolated local lab.",
+        parameters={"payload": "simulated user input payload"},
+        execute_fn=lambda payload: __import__("src.security.lab", fromlist=["IsolatedSecurityLab"]).IsolatedSecurityLab().test_sql_injection_mitigation(payload).to_dict(),
+    ))
+
+    registry.register(ToolDefinition(
+        name="security_lab_xss",
+        description="Demonstrates XSS reflection and HTML entity escaping + CSP mitigation in isolated local lab.",
+        parameters={"payload": "simulated HTML/script payload"},
+        execute_fn=lambda payload: __import__("src.security.lab", fromlist=["IsolatedSecurityLab"]).IsolatedSecurityLab().test_xss_sanitization_mitigation(payload).to_dict(),
+    ))
+
+    registry.register(ToolDefinition(
+        name="project_structure_analyze",
+        description="Analyzes project directory tree, lines of code, classes, and function symbols.",
+        parameters={"max_depth": "optional depth (default 3)"},
+        execute_fn=lambda max_depth=3: __import__("src.dev.code_analyzer", fromlist=["ProjectCodeAnalyzer"]).ProjectCodeAnalyzer.analyze_project_structure(project_root, int(max_depth)),
+    ))
+
+    registry.register(ToolDefinition(
+        name="dependency_inspect",
+        description="Inspects project dependencies from requirements.txt.",
+        parameters={"filename": "optional requirements file name (default requirements.txt)"},
+        execute_fn=lambda filename="requirements.txt": __import__("src.dev.code_analyzer", fromlist=["ProjectCodeAnalyzer"]).ProjectCodeAnalyzer.inspect_dependencies(project_root / filename),
+    ))

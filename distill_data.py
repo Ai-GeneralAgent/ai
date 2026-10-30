@@ -54,27 +54,35 @@ SYSTEM_PROMPT = (
     "Never use bullet points, numbered lists, or corporate jargon."
 )
 
-TOPICS = [
-    "asking how the other person is feeling today",
-    "making a short, witty joke about daily life",
-    "recommending a quick 15-minute dinner idea",
-    "sharing a simple tip to relax after a stressful day",
-    "debating morning coffee vs evening tea",
-    "discussing what makes a loyal, genuine friend",
-    "sharing an interesting surprising fact about nature or animals",
-    "talking about the sound of rain against the window",
-    "giving two sentences of genuine encouragement for exams or work",
-    "talking about a favorite weekend hobby like reading or gaming",
-    "explaining a simple science idea (like why the sky is blue) in plain words",
-    "suggesting a creative indoor activity for a Sunday afternoon",
-    "describing a favorite comfort food from childhood",
-    "talking about how music changes your mood instantly",
-    "sharing an honest opinion about getting up early in the morning",
-    "giving a kind, thoughtful response to someone who feels lonely",
-    "talking about walking in the park on a crisp autumn morning",
-    "recommending a classic book or movie to unwind with",
-    "discussing why taking small breaks makes a big difference",
-    "saying a warm, heartfelt goodbye to end a conversation",
+PROGRAMMING_TOPICS = [
+    ("Write a clean Python function for binary search with edge cases.", "algorithms"),
+    ("Explain the difference between stack and heap memory in C with code.", "systems"),
+    ("Show how Rust enforces ownership and borrowing at compile time.", "rust"),
+    ("Write a robust retry decorator with exponential backoff in Python.", "python"),
+    ("Explain how database indexes (B-Tree) accelerate query performance.", "database"),
+]
+
+CYBERSECURITY_TOPICS = [
+    ("Explain how parameterized queries prevent SQL injection with a code example.", "appsec"),
+    ("How does Content Security Policy (CSP) protect against reflected XSS?", "websec"),
+    ("Compare symmetric (AES-256-GCM) and asymmetric (RSA/ECC) encryption.", "cryptography"),
+    ("Explain the STRIDE threat modeling framework with an example API service.", "threat_modeling"),
+    ("What is an SSRF vulnerability and how do URL allowlists prevent it?", "network_security"),
+]
+
+REVERSE_ENG_TOPICS = [
+    ("Explain the Microsoft x64 fastcall calling convention and shadow space.", "abi"),
+    ("What are the main sections of a PE executable (.text, .rdata, .data)?", "pe_format"),
+    ("How does Python compile source code into bytecode instructions?", "bytecode"),
+    ("Explain how a disassembler reconstructs a Control Flow Graph (CFG).", "disassembly"),
+]
+
+AI_RESEARCH_TOPICS = [
+    ("Derive the mathematical formula for RMSNorm and explain why it is efficient.", "architecture"),
+    ("Explain SwiGLU activation and how the 8/3 hidden dimension ratio is chosen.", "ffn"),
+    ("How does Rotary Position Embedding (RoPE) encode relative position?", "embeddings"),
+    ("Explain how StreamingLLM uses attention sinks to maintain infinite context.", "kv_cache"),
+    ("How does the Muon optimizer orthogonalize momentum updates?", "optimization"),
 ]
 
 MATH_TEMPLATES = [

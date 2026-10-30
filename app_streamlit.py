@@ -36,19 +36,36 @@ from src.rag import LocalRAGPipeline
 from src.memory import ConversationDatabase
 from src.reasoning import ReasoningOrchestrator
 from src.backends import BackendManager, OllamaClient
+from src.research import ResearchProfile, ProfileDefinition, PROFILES, ResearchModeManager
 
-st.set_page_config(page_title="Tiny LLM & AI Assistant", page_icon="🤖", layout="wide")
+st.set_page_config(page_title="Tiny LLM & Advanced Research Platform", page_icon="🛡️", layout="wide")
 
 # Initialize Session State
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "session_id" not in st.session_state:
     st.session_state.session_id = f"web_session_{int(time.time())}"
+if "research_mgr" not in st.session_state:
+    st.session_state.research_mgr = ResearchModeManager(ResearchProfile.ADVANCED_DEVELOPMENT)
 
 # Sidebar: Configuration & Controls
 with st.sidebar:
-    st.title("⚙️ Model Controls")
-    
+    st.title("🛡️ Research & Model Controls")
+
+    # Advanced Research Execution Profile
+    st.subheader("🔬 Execution Profile")
+    profile_list = [p.value for p in ResearchProfile]
+    current_prof_idx = profile_list.index(st.session_state.research_mgr.active_profile.value)
+    chosen_profile_name = st.selectbox("Active Profile", profile_list, index=current_prof_idx)
+    active_profile_defn = st.session_state.research_mgr.set_profile_by_name(chosen_profile_name)
+
+    with st.expander("ℹ️ Profile Scope & Boundary", expanded=False):
+        st.write(f"**Scope:** {active_profile_defn.scope}")
+        st.write(f"**Safety Boundary:** {active_profile_defn.safety_boundary}")
+        st.write(f"**Capabilities:** {', '.join(active_profile_defn.capabilities)}")
+        st.write(f"**Allowed Tools:** {', '.join(active_profile_defn.allowed_tool_categories)}")
+
+    st.markdown("---")
     # Backend Selection
     backend_choice = st.radio("Active Backend", ["From-Scratch ModernTransformer", "Local Ollama Pretrained"])
     
@@ -85,12 +102,14 @@ with st.sidebar:
         st.rerun()
 
 # Main Chat Layout
-st.header("🤖 Tiny LLM & Autonomous Agent (v2.2)")
-st.caption("Self-contained Modern Transformer with RoPE, KV-Cache, Safe Python Sandbox & Multi-Step Reasoning.")
+st.header("🛡️ Tiny LLM & Advanced Research Platform")
+st.caption(f"Active Profile: **{active_profile_defn.title}** | Self-contained Modern Transformer with RoPE, KV-Cache & Cybersecurity Lab.")
 
 # Display Chat History
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
+        if msg.get("provenance"):
+            st.caption(f"🏷️ Source: **[{msg['provenance']}]**")
         if msg.get("thinking") and enable_cot:
             with st.expander("💭 Reasoning Trace (<thinking>)", expanded=False):
                 st.markdown(f"```text\n{msg['thinking']}\n```")
@@ -99,29 +118,45 @@ for msg in st.session_state.messages:
             st.caption(f"📚 Sources: {', '.join(msg['citations'])}")
 
 # User Input
-if prompt := st.chat_input("Ask a question, enter an equation, or execute Python code (/code)..."):
+if prompt := st.chat_input("Ask a technical question, analyze code, or run a security audit..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
         # Load Model & Reasoning Engine
-        tok_path = PROJECT_ROOT / "tiny_llm_from_scratch" / "tokenizer_bpe.json"
+        tok_path = PROJECT_ROOT / "tokenizer_bpe_v2.json"
+        if not tok_path.is_file():
+            tok_path = PROJECT_ROOT / "tiny_llm_from_scratch" / "tokenizer_bpe.json"
         tokenizer = Tokenizer.from_file(str(tok_path))
         
         rag = LocalRAGPipeline(PROJECT_ROOT / "tiny_llm_from_scratch" / "data_knowledge") if enable_rag else None
-        orchestrator = ReasoningOrchestrator(rag_pipeline=rag, enable_thinking=enable_cot)
+        orchestrator = ReasoningOrchestrator(
+            rag_pipeline=rag,
+            enable_thinking=enable_cot,
+            research_manager=st.session_state.research_mgr,
+        )
         
         prep = orchestrator.prepare_reasoning(prompt)
+        provenance = "Deterministic Tool"
         
         if prep.thinking and enable_cot:
             with st.expander("💭 Reasoning Trace (<thinking>)", expanded=True):
                 st.markdown(f"```text\n{prep.thinking}\n```")
         
         if prep.direct_answer:
+            provenance = "Deterministic Tool"
             response_text = prep.direct_answer
             st.markdown(response_text)
+        elif backend_choice == "Local Ollama Pretrained":
+            provenance = "Qwen Teacher"
+            from src.backends.ollama import OllamaClient
+            client = OllamaClient()
+            teacher_res = client.generate("qwen3.5:2b", prompt, system="You are an expert research and software engineer.")
+            response_text = teacher_res or "Ollama teacher model not responding."
+            st.markdown(response_text)
         else:
+            provenance = "Scratch Transformer"
             # Generate from model
             ckpt_path = ckpt_dir / selected_ckpt if selected_ckpt else None
             if ckpt_path and ckpt_path.is_file():
@@ -141,13 +176,16 @@ if prompt := st.chat_input("Ask a question, enter an equation, or execute Python
                 response_text = "Please select a valid checkpoint in the sidebar."
                 st.error(response_text)
 
+        source_info = f"🏷️ Source: **[{provenance}]**"
         if prep.retrieved_citations:
-            st.caption(f"📚 Sources: {', '.join(prep.retrieved_citations)}")
+            source_info += f" | 📚 Sources: {', '.join(prep.retrieved_citations)}"
+        st.caption(source_info)
 
         st.session_state.messages.append({
             "role": "assistant",
             "content": response_text,
             "thinking": prep.thinking,
             "citations": prep.retrieved_citations,
+            "provenance": provenance,
         })
 

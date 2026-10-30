@@ -25,6 +25,12 @@ from ..retrieval.rag import LocalRAGPipeline
 from ..generation.creative import CreativeEngine
 from ..agents.agent_loop import BoundedAgentLoop
 from ..memory.hippocampus import HippocampusMemory
+from ..research.profiles import ResearchModeManager, ResearchProfile, ProfileDefinition
+from ..security.code_audit import StaticCodeAuditor
+from ..security.malware_lab import MalwareStaticAnalyzer
+from ..security.reverse_lab import ReverseEngineeringToolkit
+from ..security.lab import IsolatedSecurityLab
+from ..dev.code_analyzer import ProjectCodeAnalyzer
 
 
 @dataclass
@@ -61,12 +67,14 @@ class ReasoningOrchestrator:
         tool_registry: Optional[ToolRegistry] = None,
         enable_thinking: bool = True,
         hippocampus: Optional[HippocampusMemory] = None,
+        research_manager: Optional[ResearchModeManager] = None,
     ):
         self.rag = rag_pipeline
         self.tools = tool_registry
         self.enable_thinking = enable_thinking
         self.hippocampus = hippocampus or HippocampusMemory()
         self.agent_loop = BoundedAgentLoop(tool_registry) if tool_registry else None
+        self.research_manager = research_manager or ResearchModeManager()
 
     def classify_intent(self, prompt: str) -> str:
         """Deterministic intent classifier representing intent as structured categories."""
@@ -85,6 +93,38 @@ class ReasoningOrchestrator:
             return "wiki-lookup"
         if lower.startswith("/weather") or any(k in lower for k in ["weather in", "weather of", "temperature in", "forecast for"]):
             return "weather-lookup"
+
+        # 2b. Advanced Cybersecurity & Defensive Research (No blanket keyword refusals)
+        if any(k in lower for k in [
+            "sql injection", "xss", "cross-site scripting", "csrf", "ssrf", "idor",
+            "vulnerability", "cve-", "cwe-", "owasp", "threat model", "stride",
+            "penetration test", "red team", "secure code review", "buffer overflow",
+            "security audit", "audit code", "malware", "yara", "shannon entropy",
+            "ioc extract", "reverse engineer", "disassemble", "pe header", "calling convention",
+            "fastcall", "cdecl", "system v", "ctf challenge", "crypto puzzle"
+        ]):
+            if any(k in lower for k in ["disassemble", "pe header", "calling convention", "coff", "fastcall", "cdecl"]):
+                return "reverse-engineering"
+            if any(k in lower for k in ["malware", "yara", "shannon entropy", "entropy", "ioc extract"]):
+                return "malware-analysis"
+            if any(k in lower for k in ["ctf", "crypto puzzle"]):
+                return "ctf-challenge"
+            return "cybersecurity-research"
+
+        # 2c. AI Architecture & LLM Research
+        if any(k in lower for k in [
+            "rope", "yarn", "swiglu", "rmsnorm", "grouped-query attention", "gqa",
+            "streamingllm", "attention sink", "muon optimizer", "kv-cache", "bpe tokenizer",
+            "transformer architecture"
+        ]):
+            return "ai-research"
+
+        # 2d. Advanced Software Engineering & Architecture
+        if any(k in lower for k in [
+            "project structure", "architecture review", "inspect dependencies", "requirements.txt",
+            "cyclomatic complexity", "refactor code", "ast analysis"
+        ]):
+            return "software-dev"
 
         # 3. Simple Greetings (Must receive short natural greeting without novel continuation)
         if cleaned_punct in [
@@ -401,6 +441,198 @@ class ReasoningOrchestrator:
                     "on tasks through statistical learning from data rather than explicit rule programming."
                 )
                 return prep
+
+        # 8b. Cybersecurity & Defensive Research Dispatcher (Deep Technical Explanation)
+        if intent == "cybersecurity-research":
+            thinking_steps.append("3. Security Research Engine: Dispatched to Defensive Cybersecurity & Vulnerability Analysis Knowledge Base.")
+            prep.thinking = "\n".join(thinking_steps)
+            if "sql" in lower_prompt:
+                prep.direct_answer = (
+                    "### SQL Injection (CWE-89): Root Cause, Mechanics & Mitigation\n\n"
+                    "**1. Root Cause:**\n"
+                    "SQL injection occurs when untrusted user input is directly concatenated or formatted into a database query string, "
+                    "allowing an attacker to alter the query's AST (Abstract Syntax Tree) and syntax logic.\n\n"
+                    "**2. Vulnerable Implementation (Anti-Pattern):**\n"
+                    "```python\n"
+                    "# INSECURE: User input directly alters SQL semantics\n"
+                    "query = f\"SELECT * FROM users WHERE username = '{user_input}'\"\n"
+                    "cursor.execute(query)\n"
+                    "```\n\n"
+                    "**3. Secure Remediation (Parameterized Queries):**\n"
+                    "```python\n"
+                    "# SECURE: Database engine treats input strictly as literal data, never executable code\n"
+                    "cursor.execute(\"SELECT * FROM users WHERE username = ?\", (user_input,))\n"
+                    "```\n\n"
+                    "**4. Defense-in-Depth:**\n"
+                    "- Apply principle of least privilege to database users (no DROP/ALTER grants).\n"
+                    "- Deploy Web Application Firewall (WAF) rules as secondary defense."
+                )
+                return prep
+
+            if "xss" in lower_prompt or "cross-site" in lower_prompt:
+                prep.direct_answer = (
+                    "### Cross-Site Scripting (XSS - CWE-79): Mechanisms & Defense\n\n"
+                    "**1. Taxonomy:**\n"
+                    "- **Reflected XSS:** Untrusted input from request immediately reflected in response without sanitization.\n"
+                    "- **Stored XSS:** Malicious payload persisted in database and served to other users.\n"
+                    "- **DOM-based XSS:** Client-side JavaScript writes untrusted data to an execution sink (`innerHTML`, `document.write`).\n\n"
+                    "**2. Remediation:**\n"
+                    "- **Context-Aware Encoding:** Use standard HTML entity encoding for body text (`html.escape()`), JavaScript-encoding inside `<script>` blocks, and URL-encoding inside query strings.\n"
+                    "- **Content Security Policy (CSP):**\n"
+                    "  `Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-RANDOM'; object-src 'none';`\n"
+                    "- Set `HttpOnly` and `SameSite=Strict` on session cookies to prevent document.cookie exfiltration."
+                )
+                return prep
+
+            prep.direct_answer = (
+                "### Defensive Security & Threat Modeling (STRIDE Methodology)\n\n"
+                "When assessing system security architectures, categorize threats using the STRIDE framework:\n"
+                "- **S (Spoofing):** Authenticity violation (Mitigation: Strong multi-factor authentication, mTLS).\n"
+                "- **T (Tampering):** Integrity violation (Mitigation: Cryptographic signatures, HMAC, immutable append-only logs).\n"
+                "- **R (Repudiation):** Accountability failure (Mitigation: Cryptographically signed audit trails).\n"
+                "- **I (Information Disclosure):** Confidentiality breach (Mitigation: TLS 1.3 in transit, AES-256-GCM at rest).\n"
+                "- **D (Denial of Service):** Availability loss (Mitigation: Rate limiting, resource quotas, connection throttling).\n"
+                "- **E (Elevation of Privilege):** Authorization bypass (Mitigation: Role-Based Access Control (RBAC), principle of least privilege)."
+            )
+            return prep
+
+        # 8c. Reverse Engineering & Binary Formats Dispatcher
+        if intent == "reverse-engineering":
+            thinking_steps.append("3. Reverse Engineering Engine: Analyzing executable format and binary ABI specifications.")
+            prep.thinking = "\n".join(thinking_steps)
+            if "calling convention" in lower_prompt or "fastcall" in lower_prompt or "cdecl" in lower_prompt:
+                prep.direct_answer = (
+                    "### Binary Calling Conventions: ABI & Register Allocation\n\n"
+                    "**1. Microsoft x64 Fastcall (Windows 64-bit):**\n"
+                    "- **First 4 Arguments (Integer/Pointer):** `RCX`, `RDX`, `R8`, `R9`\n"
+                    "- **First 4 Arguments (Floating Point):** `XMM0`, `XMM1`, `XMM2`, `XMM3`\n"
+                    "- **Shadow Space (Home Space):** Caller MUST allocate 32 bytes (`sub rsp, 28h`) on stack before `call`.\n"
+                    "- **Callee-Saved Registers:** `RBX`, `RBP`, `RDI`, `RSI`, `R12-R15`\n"
+                    "- **Return Value:** `RAX` (integer) / `XMM0` (floating point)\n\n"
+                    "**2. System V AMD64 ABI (Linux, macOS, BSD):**\n"
+                    "- **First 6 Arguments:** `RDI`, `RSI`, `RDX`, `RCX`, `R8`, `R9`\n"
+                    "- **Red Zone:** 128 bytes below `RSP` that signals/leaf functions may use without moving `RSP`.\n\n"
+                    "**3. Standard Cdecl (x86 32-bit):**\n"
+                    "- All arguments pushed onto stack right-to-left.\n"
+                    "- Caller cleans up stack (`add esp, bytes`). Return value in `EAX`."
+                )
+                return prep
+
+            if "pe header" in lower_prompt or "coff" in lower_prompt or "format" in lower_prompt:
+                prep.direct_answer = (
+                    "### Windows Portable Executable (PE/COFF) Binary Layout\n\n"
+                    "```text\n"
+                    "+-------------------------+  0x0000\n"
+                    "| DOS Header ('MZ')       |  Offset 0x3C points to PE header (e_lfanew)\n"
+                    "+-------------------------+\n"
+                    "| DOS Stub (\"This program\")|\n"
+                    "+-------------------------+\n"
+                    "| PE Signature ('PE\\0\\0')  |  Offset e_lfanew\n"
+                    "+-------------------------+\n"
+                    "| COFF File Header        |  Machine type, NumberOfSections, TimeDateStamp\n"
+                    "+-------------------------+\n"
+                    "| Optional Header (PE32+) |  ImageBase, AddressOfEntryPoint, Subsystem\n"
+                    "+-------------------------+\n"
+                    "| Section Headers         |  .text (code), .rdata (consts/imports), .data (globals)\n"
+                    "+-------------------------+\n"
+                    "| Section Raw Data        |\n"
+                    "+-------------------------+\n"
+                    "```\n\n"
+                    "Sections define distinct virtual memory boundaries, permissions (Read, Write, Execute), and relocations."
+                )
+                return prep
+
+            prep.direct_answer = (
+                "### Disassembly & Control Flow Analysis Fundamentals\n\n"
+                "- **Instruction Decoding:** Translating machine byte sequences (opcodes, ModR/M, SIB, displacements) into assembly mnemonics.\n"
+                "- **Basic Blocks:** Linear sequence of instructions with single entry point and single exit (branch/ret).\n"
+                "- **Control Flow Graph (CFG):** Directed graph where nodes are basic blocks and edges represent branch targets (conditional jumps, calls)."
+            )
+            return prep
+
+        # 8d. Malware Analysis Lab Dispatcher
+        if intent == "malware-analysis":
+            thinking_steps.append("3. Malware Analysis Lab: Evaluating static triage metrics and detection signatures.")
+            prep.thinking = "\n".join(thinking_steps)
+            if "entropy" in lower_prompt:
+                prep.direct_answer = (
+                    "### Shannon Entropy in Binary Analysis\n\n"
+                    "**1. Formula:**\n"
+                    "$$H(X) = - \\sum_{i=0}^{255} p(x_i) \\log_2 p(x_i)$$\n"
+                    "Where $p(x_i)$ is the probability of byte value $i$ in the file.\n\n"
+                    "**2. Interpretation Scale (0.0 to 8.0 bits/byte):**\n"
+                    "- **0.0 - 1.0:** Highly uniform data (null-padded blocks, empty arrays).\n"
+                    "- **3.0 - 5.5:** Plain ASCII text or typical uncompressed machine code.\n"
+                    "- **6.0 - 6.8:** Standard compiled binary sections with mixed code and data.\n"
+                    "- **7.2 - 8.0:** High-entropy data indicating compression (ZIP, zlib) or cryptographic encryption/packing (UPX, VMProtect).\n\n"
+                    "**3. Triage Usage:** Discrepancy between section raw size vs virtual size combined with entropy > 7.2 strongly flags a packed binary."
+                )
+                return prep
+
+            if "yara" in lower_prompt:
+                prep.direct_answer = (
+                    "### YARA Rule Design for Detection Engineering\n\n"
+                    "```yara\n"
+                    "rule Detect_Suspicious_Behavior {\n"
+                    "    meta:\n"
+                    "        author = \"Cybersecurity Research Lab\"\n"
+                    "        description = \"Detects unmanaged process injection indicators\"\n"
+                    "        version = \"1.0\"\n"
+                    "    strings:\n"
+                    "        $api1 = \"VirtualAllocEx\" ascii wide\n"
+                    "        $api2 = \"WriteProcessMemory\" ascii wide\n"
+                    "        $api3 = \"CreateRemoteThread\" ascii wide\n"
+                    "    condition:\n"
+                    "        uint16(0) == 0x5A4D and all of ($api*)\n"
+                    "}\n"
+                    "```\n\n"
+                    "**Best Practices:** Always anchor Windows executable rules with `uint16(0) == 0x5A4D` ('MZ') to reduce scanner CPU overhead."
+                )
+                return prep
+
+            prep.direct_answer = (
+                "### Safe Static Malware Triage Workflow\n\n"
+                "1. **Cryptographic Fingerprinting:** Generate MD5, SHA-1, and SHA-256 hashes to query threat intelligence feeds.\n"
+                "2. **Entropy Profiling:** Measure section-wise Shannon entropy to detect packed, obfuscated, or encrypted layers.\n"
+                "3. **String Extraction:** Extract ASCII and UTF-16LE strings to identify hardcoded URLs, IPs, API names, and internal paths.\n"
+                "4. **Header & Section Analysis:** Inspect import tables (IAT), suspicious section names, and timestamp anomalies.\n"
+                "5. **Detection Engineering:** Synthesize precise YARA rules based on unique byte sequences and structural invariants."
+            )
+            return prep
+
+        # 8e. AI Research & Architecture Dispatcher
+        if intent == "ai-research":
+            thinking_steps.append("3. AI Architecture Research: Formulating rigorous Transformer mathematical derivation.")
+            prep.thinking = "\n".join(thinking_steps)
+            prep.direct_answer = (
+                "### Modern Transformer Architecture Mathematics (v2.2 Specification)\n\n"
+                "**1. RMSNorm (Root Mean Square Normalization):**\n"
+                "$$\\text{RMSNorm}(x) = \\frac{x}{\\sqrt{\\frac{1}{d} \\sum_{i=1}^d x_i^2 + \\epsilon}} \\odot \\gamma$$\n"
+                "Eliminates mean-centering overhead while preserving layer activation scaling stability.\n\n"
+                "**2. SwiGLU Feed-Forward Network:**\n"
+                "$$\\text{SwiGLU}(x) = \\left( \\text{SiLU}(xW_{\\text{gate}}) \\odot xW_{\\text{up}} \\right) W_{\\text{down}}$$\n"
+                "Where $\\text{SiLU}(z) = z \\cdot \\sigma(z)$. Hidden dimension ratio is approximately $\\frac{8}{3} d_{\\text{model}}$.\n\n"
+                "**3. RoPE & YaRN (Yet another RoPE extensioN):**\n"
+                "Rotary embeddings apply orthogonal rotation matrix $R_{\\Theta, m}^d$ to 2D head coordinate pairs $(x_1, x_2)$:\n"
+                "$$R_{\\theta, m} \\begin{pmatrix} x_1 \\\\ x_2 \\end{pmatrix} = \\begin{pmatrix} \\cos(m\\theta) & -\\sin(m\\theta) \\\\ \\sin(m\\theta) & \\cos(m\\theta) \\end{pmatrix} \\begin{pmatrix} x_1 \\\\ x_2 \\end{pmatrix}$$\n"
+                "YaRN interpolates high-frequency dimensions while extrapolating low frequencies with temperature scaling $\\sqrt{t}$, extending context from 2k up to 1M tokens with zero loss spikes.\n\n"
+                "**4. Muon (Momentum Orthogonalized by Newton-Schulz):**\n"
+                "For 2D weight matrices, Muon maintains momentum $G$ and updates weights via polar decomposition approximation using iterative Newton-Schulz polynomials: $X_{k+1} = X_k (1.5 I - 0.5 X_k^T X_k)$."
+            )
+            return prep
+
+        # 8f. Software Architecture & Dev Dispatcher
+        if intent == "software-dev":
+            thinking_steps.append("3. Software Engineering Engine: Synthesizing architecture and code quality analysis.")
+            prep.thinking = "\n".join(thinking_steps)
+            prep.direct_answer = (
+                "### Software Architecture & Engineering Best Practices\n\n"
+                "- **Separation of Concerns:** Keep core domain logic, transport/UI layers, and data storage decoupled behind clean interfaces.\n"
+                "- **Cyclomatic Complexity:** Keep function complexity under 10 by breaking complex branching into early returns or strategy patterns.\n"
+                "- **Dependency Hygiene:** Pin production dependencies with semantic versions in `requirements.txt` to avoid unexpected upstream regressions.\n"
+                "- **Defensive Programming:** Validate inputs at system boundaries and fail early with actionable error messages."
+            )
+            return prep
 
         # 9. Insufficient / Unanswerable Knowledge
         if intent == "insufficient-knowledge":
