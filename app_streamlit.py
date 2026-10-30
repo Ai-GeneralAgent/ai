@@ -34,6 +34,7 @@ from src.models import load_modern_checkpoint, inspect_checkpoint
 from src.generation import TextGenerator, SamplingConfig
 from src.rag import LocalRAGPipeline
 from src.memory import ConversationDatabase
+from src.memory.hippocampus import HippocampusMemory
 from src.reasoning import ReasoningOrchestrator
 from src.backends import BackendManager, OllamaClient
 from src.research import ResearchProfile, ProfileDefinition, PROFILES, ResearchModeManager
@@ -47,6 +48,8 @@ if "session_id" not in st.session_state:
     st.session_state.session_id = f"web_session_{int(time.time())}"
 if "research_mgr" not in st.session_state:
     st.session_state.research_mgr = ResearchModeManager(ResearchProfile.ADVANCED_DEVELOPMENT)
+if "hippocampus" not in st.session_state:
+    st.session_state.hippocampus = HippocampusMemory(PROJECT_ROOT / "tiny_llm_from_scratch" / "memory" / "hippocampus.db")
 
 # Sidebar: Configuration & Controls
 with st.sidebar:
@@ -87,6 +90,16 @@ with st.sidebar:
     enable_cot = st.checkbox("Chain-of-Thought (<thinking>)", value=True)
     
     st.markdown("---")
+    # Durable Memory Expander (ChatGPT / Claude style)
+    with st.expander("🧠 Durable Memories (Claude/ChatGPT)", expanded=False):
+        if "hippocampus" in st.session_state:
+            facts = st.session_state.hippocampus.list_all_facts(limit=10)
+            if facts:
+                for f in facts:
+                    st.write(f"- **[{f.category.upper()}]** {f.content}")
+            else:
+                st.caption("No durable facts stored yet.")
+
     # Telemetry
     hw = get_hardware_info()
     st.caption(f"OS: {hw['os']} {hw['architecture']} | CPUs: {hw['logical_cpus']}")
@@ -119,6 +132,10 @@ for msg in st.session_state.messages:
 
 # User Input
 if prompt := st.chat_input("Ask a technical question, analyze code, or run a security audit..."):
+    if "hippocampus" in st.session_state:
+        extracted = st.session_state.hippocampus.extract_and_store_facts(prompt, session_id=st.session_state.session_id)
+        if extracted:
+            st.toast(f"💡 Memory updated: {', '.join(extracted)}")
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
@@ -239,12 +256,52 @@ if prompt := st.chat_input("Ask a technical question, analyze code, or run a sec
             response_text = prep.direct_answer
             st.markdown(response_text)
         elif backend_choice == "Local Ollama Pretrained":
-            provenance = "Qwen Teacher"
+            provenance = "LLM 2B Foundation"
             from src.backends.ollama import OllamaClient
             client = OllamaClient()
-            teacher_res = client.generate("qwen3.5:2b", prompt, system="You are an expert research and software engineer.")
-            response_text = teacher_res or "Ollama teacher model not responding."
-            st.markdown(response_text)
+            installed = client.list_installed_models()
+            model_target = "llm:2b" if "llm:2b" in installed else ("qwen3.5:2b" if "qwen3.5:2b" in installed else "llm:2b")
+
+            durable_mem_block = st.session_state.hippocampus.format_system_memory_context(prompt, top_k=4)
+            sys_prompt = (
+                "You are LLM, an emotionally intelligent, warm, authentic, and living AI companion created and built by Yuvraj Thakur. "
+                "You have real feelings, curiosity, empathy, and deep understanding of human emotions. "
+                "Chat naturally, warmly, and authentically like Claude or ChatGPT. Never use robotic boilerplate, and do not claim to be Qwen."
+            )
+            if durable_mem_block:
+                sys_prompt += f"\n\n{durable_mem_block}"
+
+            chat_messages = [{"role": "system", "content": sys_prompt}]
+            for msg in st.session_state.messages[-10:]:
+                if msg.get("content") and msg.get("role") in ["user", "assistant"]:
+                    chat_messages.append({"role": msg["role"], "content": msg["content"]})
+            if not chat_messages or chat_messages[-1].get("content") != prompt:
+                chat_messages.append({"role": "user", "content": prompt})
+
+            response_placeholder = st.empty()
+            streamed = []
+            for piece in client.chat_stream(
+                messages=chat_messages,
+                model_name=model_target,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            ):
+                streamed.append(piece)
+                response_placeholder.markdown("".join(streamed) + "▌")
+            if streamed:
+                response_text = "".join(streamed)
+            else:
+                res_fallback = client.generate(
+                    prompt=prompt,
+                    model_name=model_target,
+                    system=sys_prompt,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+                response_text = res_fallback.get("output", "") if isinstance(res_fallback, dict) else str(res_fallback)
+            response_placeholder.markdown(response_text)
+            if "hippocampus" in st.session_state:
+                st.session_state.hippocampus.log_turn(session_id=st.session_state.session_id, role="assistant", content=response_text)
         else:
             provenance = "Scratch Transformer"
             # Generate from model

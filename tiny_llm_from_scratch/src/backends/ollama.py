@@ -167,6 +167,102 @@ class OllamaClient:
         except Exception:
             return
 
+    def chat_stream(
+        self,
+        messages: List[Dict[str, str]],
+        model_name: str,
+        temperature: float = 0.7,
+        max_tokens: int = 512,
+        timeout: float = 60.0,
+    ):
+        """Yields streaming tokens from multi-turn conversation via Ollama /api/chat endpoint."""
+        if not self.is_server_running():
+            return
+        payload = {
+            "model": model_name,
+            "messages": messages,
+            "stream": True,
+            "think": False,
+            "options": {
+                "temperature": temperature,
+                "num_predict": max_tokens,
+            },
+        }
+
+        try:
+            data_bytes = json.dumps(payload).encode("utf-8")
+            req = urllib.request.Request(
+                f"{self.host}/api/chat",
+                data=data_bytes,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                for line in resp:
+                    if line:
+                        chunk = json.loads(line.decode("utf-8"))
+                        msg = chunk.get("message", {})
+                        piece = msg.get("content", "")
+                        if piece:
+                            yield piece
+        except Exception:
+            return
+
+    def chat(
+        self,
+        messages: List[Dict[str, str]],
+        model_name: str,
+        temperature: float = 0.7,
+        max_tokens: int = 512,
+        timeout: float = 60.0,
+    ) -> Dict[str, Any]:
+        """Queries multi-turn conversation via Ollama /api/chat endpoint."""
+        if not self.is_server_running():
+            return {
+                "success": False,
+                "output": "",
+                "error": "Ollama server is not running on 127.0.0.1:11434.",
+                "source": "ollama_unavailable",
+            }
+
+        payload = {
+            "model": model_name,
+            "messages": messages,
+            "stream": False,
+            "think": False,
+            "options": {
+                "temperature": temperature,
+                "num_predict": max_tokens,
+            },
+        }
+
+        try:
+            data_bytes = json.dumps(payload).encode("utf-8")
+            req = urllib.request.Request(
+                f"{self.host}/api/chat",
+                data=data_bytes,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                res = json.loads(resp.read().decode("utf-8"))
+                output_text = res.get("message", {}).get("content", "").strip()
+                return {
+                    "success": True,
+                    "output": output_text,
+                    "model": model_name,
+                    "source": f"teacher_chat:ollama/{model_name}",
+                    "eval_count": res.get("eval_count", 0),
+                    "total_duration_sec": res.get("total_duration", 0) / 1e9,
+                }
+        except Exception as e:
+            return {
+                "success": False,
+                "output": "",
+                "error": str(e),
+                "source": "ollama_error",
+            }
+
     def generate_synthetic_instruction(
         self,
         domain: str,

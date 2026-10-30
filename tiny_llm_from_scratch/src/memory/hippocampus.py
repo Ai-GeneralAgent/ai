@@ -1,10 +1,10 @@
 """
 Tiered Memory Architecture (AI Hippocampus)
-Implements Demis Hassabis' 3-Tier Cognitive Memory:
-1. Working Memory (active context buffer)
-2. Short-Term Memory (session-level conversation logs in SQLite)
-3. Long-Term Durable Memory (semantic/episodic facts, preferences, project knowledge)
-Includes automatic fact extraction, Hebbian recall reinforcement, and continual training export.
+Implements Demis Hassabis' 3-Tier Cognitive Memory & ChatGPT/Claude Durable Chat Memory:
+1. Working Memory (active context buffer & compact rolling dialogue)
+2. Short-Term Memory (session-level conversation episodes in SQLite)
+3. Long-Term Durable Memory (semantic/episodic facts, user profile, preferences, project constraints)
+Includes automatic fact extraction, Hebbian recall reinforcement, context compaction, and continual training export.
 """
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 @dataclass
 class DurableFact:
     fact_id: str
-    category: str  # 'profile', 'preference', 'project', 'knowledge', 'rule'
+    category: str  # 'profile', 'preference', 'project', 'knowledge', 'rule', 'identity'
     content: str
     confidence: float = 1.0
     source_session: str = "default"
@@ -44,8 +44,9 @@ class DurableFact:
 
 class HippocampusMemory:
     """
-    Cognitive Hippocampus for Small LLMs:
-    Transforms fleeting conversational context into durable, weight-consolidated memory.
+    Cognitive Hippocampus for Small & Foundation LLMs:
+    Transforms fleeting conversational context into durable, weight-consolidated memory,
+    providing ChatGPT and Claude level conversational memory across turns and sessions.
     """
 
     def __init__(self, db_path: Union[str, Path] = "memory/hippocampus.db", working_window: int = 6):
@@ -174,14 +175,97 @@ class HippocampusMemory:
             conn.commit()
             return True
 
+    def list_all_facts(self, limit: int = 100) -> List[DurableFact]:
+        """Returns all stored durable memories ordered by recency and recall count."""
+        with self._get_connection() as conn:
+            rows = conn.execute(
+                "SELECT * FROM durable_facts ORDER BY last_recalled_at DESC, recall_count DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+            results = []
+            for r in rows:
+                results.append(
+                    DurableFact(
+                        fact_id=r["fact_id"],
+                        category=r["category"],
+                        content=r["content"],
+                        confidence=r["confidence"],
+                        source_session=r["source_session"],
+                        created_at=r["created_at"],
+                        last_recalled_at=r["last_recalled_at"],
+                        recall_count=r["recall_count"],
+                        tags=json.loads(r["tags"] or "[]"),
+                    )
+                )
+            return results
+
+    def get_core_facts(self, limit: int = 4) -> List[DurableFact]:
+        """Returns core user identity, preferences, and project rules that should always be primed."""
+        with self._get_connection() as conn:
+            rows = conn.execute(
+                "SELECT * FROM durable_facts WHERE category IN ('profile', 'identity', 'rule', 'preference') ORDER BY confidence DESC, recall_count DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+            return [
+                DurableFact(
+                    fact_id=r["fact_id"],
+                    category=r["category"],
+                    content=r["content"],
+                    confidence=r["confidence"],
+                    source_session=r["source_session"],
+                    created_at=r["created_at"],
+                    last_recalled_at=r["last_recalled_at"],
+                    recall_count=r["recall_count"],
+                    tags=json.loads(r["tags"] or "[]"),
+                )
+                for r in rows
+            ]
+
+    def delete_fact(self, target: str) -> int:
+        """Deletes a durable memory fact matching fact_id or containing a substring."""
+        target_clean = target.strip()
+        if not target_clean:
+            return 0
+        with self._get_connection() as conn:
+            cur = conn.execute(
+                "DELETE FROM durable_facts WHERE fact_id = ? OR content LIKE ?",
+                (target_clean, f"%{target_clean}%"),
+            )
+            conn.commit()
+            return cur.rowcount
+
+    def clear_all_facts(self) -> int:
+        """Clears all durable facts from memory."""
+        with self._get_connection() as conn:
+            cur = conn.execute("DELETE FROM durable_facts")
+            conn.commit()
+            return cur.rowcount
+
     def recall_relevant_memories(self, query: str, top_k: int = 3, min_score: float = 0.1) -> List[DurableFact]:
         """
         Associative recall: searches long-term facts relevant to incoming query.
         Updates recall timestamp and count on retrieved facts.
         """
-        query_words = set(self._extract_keywords(query.lower()))
-        if not query_words:
-            return []
+        query_lower = query.lower()
+        query_words = set(self._extract_keywords(query_lower))
+
+        # Check if query is asking broadly about identity, preferences, or memory
+        broad_memory_query = any(
+            phrase in query_lower
+            for phrase in [
+                "who am i",
+                "what is my name",
+                "what's my name",
+                "do you remember me",
+                "what do you remember",
+                "tell me about myself",
+                "my preferences",
+                "what do you know about me",
+                "remember anything about me",
+                "who created you",
+                "who made you",
+            ]
+        )
 
         with self._get_connection() as conn:
             rows = conn.execute("SELECT * FROM durable_facts ORDER BY confidence DESC, recall_count DESC").fetchall()
@@ -190,6 +274,7 @@ class HippocampusMemory:
             for r in rows:
                 content_lower = r["content"].lower()
                 tags_list = json.loads(r["tags"] or "[]")
+                category = r["category"]
                 score = 0.0
 
                 # Match words in content
@@ -202,11 +287,18 @@ class HippocampusMemory:
                 tag_overlap = len(query_words.intersection(set(t.lower() for t in tags_list)))
                 score += tag_overlap * 2.0
 
+                # Broad memory query bonus
+                if broad_memory_query:
+                    if category in ["profile", "identity"]:
+                        score += 3.0
+                    elif category in ["preference", "rule"]:
+                        score += 1.5
+
                 # Recency & Reinforcement boost
                 score += min(1.0, r["recall_count"] * 0.1)
                 score *= r["confidence"]
 
-                if score >= min_score:
+                if score >= min_score or (broad_memory_query and category in ["profile", "identity"]):
                     fact = DurableFact(
                         fact_id=r["fact_id"],
                         category=r["category"],
@@ -245,22 +337,98 @@ class HippocampusMemory:
         lines.append("")
         return "\n".join(lines)
 
+    def format_system_memory_context(self, query: str = "", top_k: int = 5) -> str:
+        """
+        Constructs Claude/ChatGPT-style structured memory block for injection into system persona.
+        Combines persistent core profile facts with dynamically retrieved episodic facts.
+        """
+        core_facts = self.get_core_facts(limit=3)
+        recalled = self.recall_relevant_memories(query, top_k=top_k) if query else []
+
+        # Merge deduplicated by fact_id
+        seen = set()
+        merged: List[DurableFact] = []
+        for f in core_facts + recalled:
+            if f.fact_id not in seen:
+                seen.add(f.fact_id)
+                merged.append(f)
+
+        if not merged:
+            return ""
+
+        lines = [
+            "<durable_user_memory>",
+            "The following user and project memories have been recalled from previous interactions:",
+        ]
+        for f in merged:
+            lines.append(f"- [{f.category.upper()}] {f.content}")
+        lines.append("Use these memories naturally to personalize your response without repeating the list back to the user unless asked.")
+        lines.append("</durable_user_memory>")
+        return "\n".join(lines)
+
     # ---------------------------------------------------------
-    # Automated Fact Extractor
+    # Automated Fact Extractor (Claude & ChatGPT Style)
     # ---------------------------------------------------------
     def extract_and_store_facts(self, text: str, session_id: str = "default") -> List[str]:
         """Detects identity, preferences, decisions, and system rules in conversation turns."""
         extracted = []
-        lower = text.strip()
+        lower = text.strip().lower()
+
+        # 0. Explicit Memory Directives (e.g. "Remember that...", "Please remember...", "Note that...")
+        directive_match = re.search(
+            r"\b(?:remember\s+that|please\s+remember\s+that|remember\s+this|remember|please\s+remember|keep\s+in\s+mind\s+that|keep\s+in\s+mind|note\s+that|don't\s+forget\s+that)\s+([^.?!;\n]{3,120})",
+            text,
+            re.IGNORECASE,
+        )
+        if directive_match:
+            raw_fact = directive_match.group(1).strip()
+            # Normalize first-person pronouns
+            norm_fact = re.sub(r"\b(?:i\s+am|i'm)\b", "User is", raw_fact, flags=re.IGNORECASE)
+            norm_fact = re.sub(r"\b(?:my)\b", "User's", norm_fact, flags=re.IGNORECASE)
+            norm_fact = re.sub(r"\b(?:i\s+have)\b", "User has", norm_fact, flags=re.IGNORECASE)
+            norm_fact = re.sub(r"\b(?:i\s+like|i\s+love|i\s+prefer)\b", "User prefers", norm_fact, flags=re.IGNORECASE)
+            norm_fact = re.sub(r"\b(?:we\s+are)\b", "Project is", norm_fact, flags=re.IGNORECASE)
+            norm_fact = re.sub(r"\b(?:our)\b", "Project's", norm_fact, flags=re.IGNORECASE)
+            if not norm_fact.endswith("."):
+                norm_fact += "."
+            fact = f"User noted: {norm_fact}"
+            if self.store_fact(fact, category="preference", source_session=session_id):
+                extracted.append(fact)
 
         # 1. Identity & Profile
         name_match = re.search(r"\b(?:my name is|i am|call me)\s+([A-Z][a-zA-Z\s]{1,30})\b", text, re.IGNORECASE)
         if name_match:
-            fact = f"User's name is {name_match.group(1).strip()}."
+            cand = name_match.group(1).strip()
+            # Filter out non-names like "tired", "fine", "ready"
+            if cand.lower() not in ["fine", "good", "ready", "happy", "tired", "here", "curious", "interested"]:
+                fact = f"User's name is {cand}."
+                if self.store_fact(fact, category="profile", source_session=session_id):
+                    extracted.append(fact)
+
+        job_match = re.search(r"\b(?:i work as|i am an?|my profession is|my role is|my job is)\s+([a-zA-Z0-9_\s]{3,40})\b", text, re.IGNORECASE)
+        if job_match:
+            job = job_match.group(1).strip()
+            if job.lower() not in ["thinking", "ready", "here", "fine", "looking"]:
+                fact = f"User works as {job}."
+                if self.store_fact(fact, category="profile", source_session=session_id):
+                    extracted.append(fact)
+
+        loc_match = re.search(r"\b(?:i live in|i'm based in|i am from|my location is)\s+([A-Za-z0-9_\s,]{3,40})\b", text, re.IGNORECASE)
+        if loc_match:
+            loc = loc_match.group(1).strip()
+            fact = f"User is located in {loc}."
             if self.store_fact(fact, category="profile", source_session=session_id):
                 extracted.append(fact)
 
-        # 2. Preferences
+        # 2. Preferences & Favorites
+        fav_match = re.search(r"\b(?:my favorite|my preferred)\s+([a-zA-Z0-9_\s]{2,25})\s+is\s+([^.?!,;\n]{2,50})", text, re.IGNORECASE)
+        if fav_match:
+            item = fav_match.group(1).strip()
+            val = fav_match.group(2).strip()
+            fact = f"User's favorite {item} is {val}."
+            if self.store_fact(fact, category="preference", source_session=session_id):
+                extracted.append(fact)
+
         pref_match = re.search(r"\b(?:i prefer|i like|i always want|please always|don't ever|never)\s+([^.?!,;\n]{4,80})", text, re.IGNORECASE)
         if pref_match:
             fact = f"User preference: {pref_match.group(0).strip()}."
@@ -268,6 +436,13 @@ class HippocampusMemory:
                 extracted.append(fact)
 
         # 3. Project & Environment Constraints
+        proj_match = re.search(r"\b(?:our project is|the project is|we are building|my project is)\s+([^.?!,;\n]{3,80})", text, re.IGNORECASE)
+        if proj_match:
+            p_desc = proj_match.group(1).strip()
+            fact = f"Project focus: {p_desc}."
+            if self.store_fact(fact, category="project", source_session=session_id):
+                extracted.append(fact)
+
         if "d drive" in lower or "work in d" in lower:
             fact = "Project environment rule: Always use D: drive, strictly avoid writing to C: drive."
             if self.store_fact(fact, category="rule", source_session=session_id):
@@ -280,6 +455,41 @@ class HippocampusMemory:
                 extracted.append(fact)
 
         return extracted
+
+    # ---------------------------------------------------------
+    # Context Compaction & Rolling Summary (ChatGPT/Claude Style)
+    # ---------------------------------------------------------
+    @staticmethod
+    def compact_conversation_history(
+        messages: List[Dict[str, Any]], keep_recent: int = 8
+    ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+        """
+        Implements ChatGPT & Claude conversational context compaction:
+        When message history exceeds keep_recent turns, compresses earlier dialogue turns
+        into a concise summary context note while preserving recent turns intact.
+        """
+        if len(messages) <= keep_recent:
+            return messages, None
+
+        older = messages[:-keep_recent]
+        recent = messages[-keep_recent:]
+
+        topics = []
+        for msg in older:
+            role = msg.get("role", "")
+            content = msg.get("content", "").strip()
+            if not content:
+                continue
+            first_line = content.splitlines()[0][:70]
+            if role == "user":
+                topics.append(f"User inquired: '{first_line}'")
+            elif role == "assistant":
+                topics.append(f"Assistant resolved: '{first_line}'")
+
+        summary_body = " | ".join(topics[-6:])  # Last few compressed points
+        summary_note = f"[Prior Conversation Context Summary ({len(older)} earlier turns): {summary_body}]"
+
+        return recent, summary_note
 
     # ---------------------------------------------------------
     # Continual Learning Data Export (for Nightly Sleep Loop)

@@ -35,6 +35,7 @@ from ..tools.builtin import register_builtin_tools, solve_math_problem
 from ..reasoning.orchestrator import ReasoningOrchestrator
 from ..rag.pipeline import LocalRAGPipeline
 from ..memory.conversation_db import ConversationDatabase
+from ..memory.hippocampus import HippocampusMemory
 from ..backends.ollama import OllamaClient
 
 
@@ -205,6 +206,10 @@ def print_help():
     print(f"  {C.YELLOW}/topp <float>{C.RESET}        Set nucleus top-p sampling (default: 0.90)")
     print(f"  {C.YELLOW}/history{C.RESET}             Show recent messages from SQLite memory")
     print(f"  {C.YELLOW}/clear{C.RESET}               Clear current conversation memory context")
+    print(f"  {C.YELLOW}/memory [list]{C.RESET}        View Claude/ChatGPT durable memories remembered across sessions")
+    print(f"  {C.YELLOW}/memory add <fact>{C.RESET}    Manually store a durable memory fact")
+    print(f"  {C.YELLOW}/memory forget <q>{C.RESET}    Remove durable memories matching query")
+    print(f"  {C.YELLOW}/memory clear{C.RESET}         Clear all durable memories from Hippocampus")
     print(f"  {C.YELLOW}/stats{C.RESET}               Show system parameters, RAM, context window, and metrics")
     print(f"  {C.YELLOW}/system <prompt>{C.RESET}     Set active system persona / prompt")
     print(f"{C.GRAY}{'-' * 40}{C.RESET}\n")
@@ -246,7 +251,9 @@ def launch_cli():
     # Resolve Tokenizer dynamically to match model checkpoint vocab size
     tokenizer, tok_path = resolve_tokenizer_for_model(project_root, model=model, requested_path=args.tokenizer)
 
-    # Initialize Memory & Session
+    # Initialize Persistent Cognitive Hippocampus & Session Working DB
+    hippocampus_db = project_root / "memory" / "hippocampus.db"
+    hippocampus = HippocampusMemory(db_path=hippocampus_db)
     memory = ConversationDatabase(db_path)
     session_id = f"session_{int(time.time())}"
     memory.create_session(session_id, "Interactive Terminal CLI")
@@ -279,6 +286,7 @@ def launch_cli():
         rag_pipeline=rag if args.rag else None,
         tool_registry=tools,
         enable_thinking=args.think,
+        hippocampus=hippocampus,
     )
     if unrestricted_mode and hasattr(orchestrator, "agent_loop") and orchestrator.agent_loop:
         orchestrator.agent_loop.set_bypass_security(True)
@@ -912,19 +920,32 @@ def launch_cli():
             continue
 
         elif lead == "/memory":
-            print(f"\n{C.BOLD}{C.CYAN}--- AI HIPPOCAMPUS (TIERED DURABLE MEMORY) ---{C.RESET}")
-            if hasattr(orchestrator, "hippocampus"):
-                mem = orchestrator.hippocampus
-                with mem._get_connection() as conn:
-                    facts = conn.execute("SELECT * FROM durable_facts ORDER BY confidence DESC, recall_count DESC").fetchall()
-                    if not facts:
-                        print(f"  {C.GRAY}No durable memories stored yet. Converse naturally to store facts.{C.RESET}")
-                    else:
-                        print(f"  {C.GREEN}Total Stored Durable Facts: {len(facts)}{C.RESET}\n")
-                        for f in facts:
-                            print(f"  {C.YELLOW}[{f['category'].upper()}]{C.RESET} {f['content']}")
-                            print(f"    {C.GRAY}Confidence: {f['confidence']*100:.0f}% | Recalled: {f['recall_count']} times{C.RESET}")
-            print(f"{C.GRAY}{'-' * 40}{C.RESET}\n")
+            parts = user_input.split(maxsplit=2)
+            subcmd = parts[1].lower() if len(parts) > 1 else "list"
+            if subcmd in ["list", "show", "all"]:
+                facts = hippocampus.list_all_facts(limit=50)
+                print(f"\n{C.BOLD}{C.CYAN}--- AI HIPPOCAMPUS (CLAUDE & CHATGPT CHAT MEMORY) ---{C.RESET}")
+                if not facts:
+                    print(f"  {C.GRAY}No durable memories stored yet. Mention things like 'Remember that I prefer Python' or 'My name is ...'{C.RESET}")
+                else:
+                    print(f"  {C.GREEN}Total Stored Durable Facts: {len(facts)}{C.RESET}\n")
+                    for idx, f in enumerate(facts, 1):
+                        print(f"  {C.YELLOW}{idx}. [{f.category.upper()}]{C.RESET} {f.content}")
+                        print(f"     {C.GRAY}Confidence: {f.confidence*100:.0f}% | Recalled: {f.recall_count}x | Added: {time.strftime('%Y-%m-%d %H:%M', time.localtime(f.created_at))}{C.RESET}")
+                print(f"{C.GRAY}{'-' * 45}{C.RESET}\n")
+            elif subcmd == "add" and len(parts) > 2:
+                fact_text = parts[2].strip()
+                hippocampus.store_fact(fact_text, category="preference", source_session=session_id)
+                print(f"{C.GREEN}✓ [Memory stored]:{C.RESET} {fact_text}")
+            elif subcmd in ["forget", "delete", "remove"] and len(parts) > 2:
+                q = parts[2].strip()
+                deleted = hippocampus.delete_fact(q)
+                print(f"{C.YELLOW}✓ Removed {deleted} matching memory fact(s).{C.RESET}")
+            elif subcmd == "clear":
+                cleared = hippocampus.clear_all_facts()
+                print(f"{C.RED}✓ Cleared {cleared} durable memory facts.{C.RESET}")
+            else:
+                print(f"{C.YELLOW}Usage:{C.RESET} /memory [list] | /memory add <fact> | /memory forget <query> | /memory clear")
             continue
 
         elif lead == "/sleep":
@@ -1004,13 +1025,20 @@ def launch_cli():
             continue
 
         # Mode B: Assistant Chat Mode (Default)
-        # Store user turn in SQLite Memory
+        # Automatic Durable Fact Extraction (Claude & ChatGPT Style)
+        extracted_facts = hippocampus.extract_and_store_facts(user_input, session_id=session_id)
+        if extracted_facts:
+            for ef in extracted_facts:
+                print(f"  {C.GRAY}{C.CYAN}💡 [Memory updated: {ef}]{C.RESET}")
+
+        # Store user turn in SQLite Working Memory
         memory.add_message(session_id, "user", user_input)
-        recent_history = memory.get_messages(session_id, limit=6)
+        session_history = memory.get_messages(session_id, limit=20)
+        compacted_history, summary_note = hippocampus.compact_conversation_history(session_history, keep_recent=8)
 
         # Stage 1: Prepare Reasoning, Intent, Thinking, and Tools with Conversation Context
         t0 = time.time()
-        prep = orchestrator.prepare_reasoning(user_input, conversation_history=recent_history)
+        prep = orchestrator.prepare_reasoning(user_input, conversation_history=compacted_history)
 
         # Display internal thinking trace if enabled
         if show_thinking and prep.thinking:
@@ -1041,44 +1069,85 @@ def launch_cli():
                             use_teacher = True
                             break
 
+            # Dynamic Memory Injection into System Prompt (Claude/ChatGPT Architecture)
+            durable_mem_block = hippocampus.format_system_memory_context(user_input, top_k=4)
+            system_t = (
+                f"{system_persona} You are talking with your creator, Yuvraj Thakur. "
+                f"Respond with human emotional resonance, warmth, nuance, and conversational depth like Claude or ChatGPT. "
+                f"Never use robotic disclaimers, cold corporate filler, or claims of lacking emotion, and do not claim to be Qwen."
+            )
+            if durable_mem_block:
+                system_t += f"\n\n{durable_mem_block}"
+            if summary_note:
+                system_t += f"\n\n{summary_note}"
+
             if use_teacher and chosen_teacher:
                 o_cli = OllamaClient()
                 pieces = []
-                system_t = (
-                    f"{system_persona} You are talking with your creator, Yuvraj Thakur. "
-                    f"Respond with human emotional resonance, warmth, nuance, and conversational depth like Claude or ChatGPT. "
-                    f"Never use robotic disclaimers, cold corporate filler, or claims of lacking emotion, and do not claim to be Qwen."
-                )
+                # Build multi-turn chat conversation messages array
+                chat_messages = [{"role": "system", "content": system_t}]
+                for m in compacted_history:
+                    if m.get("content") and m.get("role") in ["user", "assistant"]:
+                        chat_messages.append({"role": m["role"], "content": m["content"]})
+                if not chat_messages or chat_messages[-1].get("content") != user_input:
+                    chat_messages.append({"role": "user", "content": user_input})
+
                 if stream_output:
-                    for piece in o_cli.generate_stream(
-                        prompt=user_input,
+                    for piece in o_cli.chat_stream(
+                        messages=chat_messages,
                         model_name=chosen_teacher,
-                        system=system_t,
                         temperature=sampling_cfg.temperature,
                         max_tokens=sampling_cfg.max_new_tokens,
                     ):
                         sys.stdout.write(piece)
                         sys.stdout.flush()
                         pieces.append(piece)
-                    print()
-                    raw_text = "".join(pieces)
+                    if pieces:
+                        print()
+                        raw_text = "".join(pieces)
+                    else:
+                        # Fallback to generate_stream if chat_stream yielded nothing
+                        for piece in o_cli.generate_stream(
+                            prompt=user_input,
+                            model_name=chosen_teacher,
+                            system=system_t,
+                            temperature=sampling_cfg.temperature,
+                            max_tokens=sampling_cfg.max_new_tokens,
+                        ):
+                            sys.stdout.write(piece)
+                            sys.stdout.flush()
+                            pieces.append(piece)
+                        print()
+                        raw_text = "".join(pieces)
                 else:
-                    res_t = o_cli.generate(
-                        prompt=user_input,
+                    res_t = o_cli.chat(
+                        messages=chat_messages,
                         model_name=chosen_teacher,
-                        system=system_t,
                         temperature=sampling_cfg.temperature,
                         max_tokens=sampling_cfg.max_new_tokens,
                     )
                     raw_text = res_t.get("output", "")
+                    if not raw_text:
+                        res_fallback = o_cli.generate(
+                            prompt=user_input,
+                            model_name=chosen_teacher,
+                            system=system_t,
+                            temperature=sampling_cfg.temperature,
+                            max_tokens=sampling_cfg.max_new_tokens,
+                        )
+                        raw_text = res_fallback.get("output", "")
                     print(raw_text)
                 final_text = OutputOptimizer.optimize(raw_text, thinking_trace=prep.thinking, intent=prep.intent)
             elif generator:
                 from ..generation.template import ChatTemplate, ChatMessage
                 chat_template = ChatTemplate()
-                formatted_prompt = chat_template.format([
-                    ChatMessage(role=m["role"], content=m["content"]) for m in recent_history
-                ])
+                messages_for_template = [ChatMessage(role="system", content=system_t)]
+                for m in compacted_history:
+                    if m.get("content") and m.get("role") in ["user", "assistant"]:
+                        messages_for_template.append(ChatMessage(role=m["role"], content=m["content"]))
+                if not messages_for_template or messages_for_template[-1].content != user_input:
+                    messages_for_template.append(ChatMessage(role="user", content=user_input))
+                formatted_prompt = chat_template.format(messages_for_template)
                 if stream_output:
                     prompt_ids = tokenizer.encode(formatted_prompt).ids
                     pieces = []
@@ -1109,6 +1178,7 @@ def launch_cli():
 
         # Save assistant response to memory for multi-turn history continuity
         memory.add_message(session_id, "assistant", final_text)
+        hippocampus.log_turn(session_id=session_id, role="assistant", content=final_text)
         last_response = final_text
 
         elapsed = time.time() - t0
