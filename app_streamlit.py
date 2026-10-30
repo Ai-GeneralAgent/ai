@@ -151,6 +151,13 @@ if prompt := st.chat_input("Ask a technical question, analyze code, or run a sec
             response_text = WebBrowserEngine.format_browser_display(res)
             provenance = "Browser Engine"
             st.markdown(response_text)
+        elif prompt.startswith("/learn"):
+            learn_topic = prompt.split("/learn", 1)[1].strip()
+            from src.tools.internet_learner import InternetLearnerEngine
+            pkg = InternetLearnerEngine.learn(learn_topic, project_root=PROJECT_ROOT, rag_pipeline=rag, deep_browse=True)
+            response_text = InternetLearnerEngine.format_learning_report(pkg)
+            provenance = "Internet Learner"
+            st.markdown(response_text)
         elif prompt.startswith("/agent"):
             goal = prompt.split("/agent", 1)[1].strip()
             from src.agents.autonomous_agent import AutonomousWorkAgent

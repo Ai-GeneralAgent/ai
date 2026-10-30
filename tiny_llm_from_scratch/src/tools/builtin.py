@@ -634,6 +634,13 @@ def register_builtin_tools(registry: ToolRegistry, project_root: Path = Path("."
         execute_fn=lambda goal: __import__("src.agents.autonomous_agent", fromlist=["AutonomousWorkAgent"]).AutonomousWorkAgent(registry, verbose=False).execute_mission(goal).to_dict(),
     ))
 
+    registry.register(ToolDefinition(
+        name="learn_from_internet",
+        description="Autonomously searches DuckDuckGo, browses web articles, distills facts into SQLite Hippocampus, saves RAG documents, and generates training pairs.",
+        parameters={"topic": "topic or technical subject to learn from internet", "deep_browse": "whether to scrape top web page (default True)"},
+        execute_fn=lambda topic, deep_browse=True: __import__("src.tools.internet_learner", fromlist=["InternetLearnerEngine"]).InternetLearnerEngine.learn(topic, project_root, deep_browse=bool(deep_browse)).to_dict(),
+    ))
+
     # --- GITHUB & GIT AUTOMATION TOOLS ---
     registry.register(ToolDefinition(
         name="github_search_repos",

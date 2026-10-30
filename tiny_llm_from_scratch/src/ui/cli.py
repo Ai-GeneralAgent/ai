@@ -438,6 +438,19 @@ def launch_cli():
                 last_response = formatted
             continue
 
+        elif lead == "/learn":
+            learn_topic = " ".join(user_input.split()[1:]).strip()
+            if not learn_topic:
+                print(f"{C.RED}Usage: /learn <topic_or_subject>{C.RESET}")
+            else:
+                from ..tools.internet_learner import InternetLearnerEngine
+                print(f"{C.CYAN}Searching DuckDuckGo and learning '{learn_topic}' from the internet...{C.RESET}")
+                pkg = InternetLearnerEngine.learn(learn_topic, project_root=project_root, hippocampus=hippocampus, rag_pipeline=rag_pipeline, deep_browse=True)
+                report = InternetLearnerEngine.format_learning_report(pkg)
+                print(f"\n{report}\n")
+                last_response = report
+            continue
+
         elif lead == "/mode":
             if len(cmd) > 1:
                 submode = cmd[1].lower().strip()

@@ -82,7 +82,14 @@ class ReasoningOrchestrator:
         cleaned_punct = re.sub(r"[^\w\s]", "", lower).strip()
         words = lower.split()
 
-        # 1. Explicit tool commands / Web Search
+        # 1. Explicit tool commands / Web Search & Internet Learning
+        if lower.startswith(("/learn", "/study-web")) or any(k in lower for k in [
+            "learn from internet", "learn from the internet", "learn from web",
+            "use duckduckgo to learn", "use duck duck go to learn", "use duck duck go and make it able to also learn",
+            "search the internet and learn", "study from web", "learn foem internet"
+        ]):
+            return "internet-learning"
+
         if lower.startswith(("/search", "/web")) or "duckduckgo" in lower or any(k in lower for k in ["search the web", "search online", "search web"]):
             return "web-search"
 
@@ -770,6 +777,27 @@ class ReasoningOrchestrator:
                 prep.thinking = "\n".join(thinking_steps)
                 prep.direct_answer = f"The current date and time is: **{res.get('result')}**"
                 return prep
+
+        # 14b. Internet Learning via DuckDuckGo & Autonomous Web Ingestion
+        if intent == "internet-learning":
+            from ..tools.internet_learner import InternetLearnerEngine
+            clean_topic = re.sub(r"^(?:/learn|/study-web|learn\s+(?:about|from\s+(?:the\s+)?internet\s+about)?|use\s+duck\s*duck\s*go\s+(?:and\s+)?(?:make\s+it\s+able\s+to\s+)?(?:also\s+)?learn\s+(?:from\s+(?:the\s+)?internet\s+about)?)\s*", "", user_prompt, flags=re.IGNORECASE).strip()
+            clean_topic = re.sub(r"^(?:use\s+duck\s*duck\s*go\s+and\s+make\s+it\s+able\s+to\s+also\s+learn\s+(?:foem|from)?\s+internet\s+make\s+it\s+able\s+to\s+learn\s+(?:and\s+more\s+thing)?)\s*", "artificial intelligence and machine learning", clean_topic, flags=re.IGNORECASE).strip()
+            if not clean_topic or len(clean_topic) < 2:
+                clean_topic = "modern artificial intelligence and autonomous research"
+            thinking_steps.append(f"3. Internet Learner: Querying DuckDuckGo and browsing live web sources for '{clean_topic}'.")
+            pkg = InternetLearnerEngine.learn(clean_topic, hippocampus=self.hippocampus, rag_pipeline=self.rag, deep_browse=True)
+            thinking_steps.append(f"4. Knowledge Distillation: Ingested {pkg.hippocampus_facts_stored} durable facts into SQLite Hippocampus.")
+            thinking_steps.append(f"5. Continual Learning: Formulated {pkg.sft_samples_generated} ChatML training examples and indexed into Local RAG.")
+            prep.thinking = "\n".join(thinking_steps)
+            prep.direct_answer = InternetLearnerEngine.format_learning_report(pkg)
+            prep.retrieved_citations = pkg.source_urls[:3]
+            prep.verifications.append({
+                "check": "Internet Learning & Ingestion",
+                "passed": True,
+                "details": f"Ingested {len(pkg.extracted_facts)} facts from {len(pkg.source_urls)} DuckDuckGo sources.",
+            })
+            return prep
 
         # 15. DuckDuckGo Live Web Search
         if intent == "web-search":
