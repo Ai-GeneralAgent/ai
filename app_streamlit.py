@@ -144,7 +144,26 @@ if prompt := st.chat_input("Ask a technical question, analyze code, or run a sec
             with st.expander("💭 Reasoning Trace (<thinking>)", expanded=True):
                 st.markdown(f"```text\n{prep.thinking}\n```")
         
-        if prep.direct_answer:
+        if prompt.startswith("/browse"):
+            url = prompt.split("/browse", 1)[1].strip()
+            from src.tools.browser import WebBrowserEngine
+            res = WebBrowserEngine.browse_url(url, max_chars=4000)
+            response_text = WebBrowserEngine.format_browser_display(res)
+            provenance = "Browser Engine"
+            st.markdown(response_text)
+        elif prompt.startswith("/agent"):
+            goal = prompt.split("/agent", 1)[1].strip()
+            from src.agents.autonomous_agent import AutonomousWorkAgent
+            from src.tools.registry import ToolRegistry
+            from src.tools.builtin import register_builtin_tools
+            reg = ToolRegistry()
+            register_builtin_tools(reg, PROJECT_ROOT)
+            agent = AutonomousWorkAgent(reg, max_steps=6, verbose=False)
+            mission_res = agent.execute_mission(goal)
+            response_text = mission_res.synthesized_output
+            provenance = "Autonomous Agent"
+            st.markdown(response_text)
+        elif prep.direct_answer:
             provenance = "Deterministic Tool"
             response_text = prep.direct_answer
             st.markdown(response_text)

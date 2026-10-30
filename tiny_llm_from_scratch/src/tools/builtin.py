@@ -611,3 +611,25 @@ def register_builtin_tools(registry: ToolRegistry, project_root: Path = Path("."
         parameters={"filename": "optional requirements file name (default requirements.txt)"},
         execute_fn=lambda filename="requirements.txt": __import__("src.dev.code_analyzer", fromlist=["ProjectCodeAnalyzer"]).ProjectCodeAnalyzer.inspect_dependencies(project_root / filename),
     ))
+
+    # --- BROWSER & AUTONOMOUS AGENT TOOLS ---
+    registry.register(ToolDefinition(
+        name="browse_web_page",
+        description="Headless web browser: fetches an HTTP/HTTPS URL, strips HTML tags/scripts, and extracts clean text, title, and links.",
+        parameters={"url": "target webpage URL to browse", "max_chars": "optional character limit (default 4000)"},
+        execute_fn=lambda url, max_chars=4000: __import__("src.tools.browser", fromlist=["WebBrowserEngine"]).WebBrowserEngine.browse_url(url, int(max_chars)),
+    ))
+
+    registry.register(ToolDefinition(
+        name="search_and_browse",
+        description="Searches DuckDuckGo and immediately browses and extracts full text from the top search result.",
+        parameters={"query": "search topic or query", "max_chars": "optional character limit (default 4000)"},
+        execute_fn=lambda query, max_chars=4000: __import__("src.tools.browser", fromlist=["WebBrowserEngine"]).WebBrowserEngine.search_and_browse(query, int(max_chars)),
+    ))
+
+    registry.register(ToolDefinition(
+        name="run_autonomous_agent",
+        description="Launches an autonomous multi-step agent mission with planning, tool chaining, intermediate error recovery, and evidence synthesis.",
+        parameters={"goal": "high-level mission goal to accomplish"},
+        execute_fn=lambda goal: __import__("src.agents.autonomous_agent", fromlist=["AutonomousWorkAgent"]).AutonomousWorkAgent(registry, verbose=False).execute_mission(goal).to_dict(),
+    ))

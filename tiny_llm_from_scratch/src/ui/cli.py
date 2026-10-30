@@ -575,6 +575,40 @@ def launch_cli():
                     print(f"{C.RED}Lab execution error: {e}{C.RESET}")
             continue
 
+        elif lead == "/browse":
+            target_url = " ".join(user_input.split()[1:]).strip()
+            if not target_url:
+                print(f"{C.RED}Usage: /browse <url>  (e.g. /browse https://en.wikipedia.org/wiki/Python){C.RESET}")
+            else:
+                from ..tools.browser import WebBrowserEngine
+                print(f"{C.GRAY}Fetching web page: {target_url}...{C.RESET}")
+                page = WebBrowserEngine.browse_url(target_url, max_chars=4000)
+                card = WebBrowserEngine.format_browser_display(page)
+                print(f"\n{card}\n")
+                last_response = card
+            continue
+
+        elif lead == "/agent":
+            mission_goal = " ".join(user_input.split()[1:]).strip()
+            if not mission_goal:
+                print(f"{C.RED}Usage: /agent <goal>  (e.g. /agent research Python 3.14 features and browse top results){C.RESET}")
+            else:
+                from ..agents.autonomous_agent import AutonomousWorkAgent
+                print(f"\n{C.CYAN}{C.BOLD}=== LAUNCHING AUTONOMOUS AGENT MISSION ==={C.RESET}")
+                print(f"Goal: {mission_goal}\n")
+                agent = AutonomousWorkAgent(tools, max_steps=8, verbose=True)
+                res = agent.execute_mission(mission_goal)
+                print(f"\n{C.GREEN}{C.BOLD}=== AGENT MISSION SUMMARY ==={C.RESET}")
+                print(f"Completed: {res.completed} in {res.elapsed_sec:.2f}s ({len(res.steps)} steps)")
+                for s in res.steps:
+                    st_col = C.GREEN if not s.error else C.RED
+                    print(f"  {st_col}[Step {s.step_num}]{C.RESET} {s.thought}")
+                    if s.tool_name:
+                        print(f"    Tool: {s.tool_name}")
+                print(f"\n{res.synthesized_output}\n")
+                last_response = res.synthesized_output
+            continue
+
         elif lead == "/artifacts":
             from ..generation.artifacts import ArtifactEngine
             arts = ArtifactEngine.extract_artifacts(last_response)
