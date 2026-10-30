@@ -251,6 +251,14 @@ if prompt := st.chat_input("Ask a technical question, analyze code, or run a sec
             ckpt_path = ckpt_dir / selected_ckpt if selected_ckpt else None
             if ckpt_path and ckpt_path.is_file():
                 model, _ = load_modern_checkpoint(ckpt_path, device="cpu")
+                m_vocab = getattr(getattr(model, "config", None), "vocab_size", 10000)
+                if m_vocab <= 10000:
+                    matched_tok = PROJECT_ROOT / "tokenizer_bpe.json"
+                    if not matched_tok.is_file():
+                        matched_tok = PROJECT_ROOT / "tiny_llm_from_scratch" / "tokenizer_bpe.json"
+                else:
+                    matched_tok = PROJECT_ROOT / "tokenizer_bpe_v2.json"
+                tokenizer = Tokenizer.from_file(str(matched_tok))
                 gen = TextGenerator(model, tokenizer)
                 s_cfg = SamplingConfig(temperature=temperature, top_p=top_p, top_k=top_k, max_new_tokens=max_tokens)
                 

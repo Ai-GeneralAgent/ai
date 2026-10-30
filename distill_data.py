@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
-Self-Verified Distillation Pipeline (Ollama Teachers -> Small LLM Dataset).
-Uses local Ollama teacher models (qwen3.5:2b, humanchat, gemma) to generate:
+Self-Verified Distillation Pipeline (Ollama Teachers + Offline Expert Generator -> Small LLM Dataset).
+Generates:
 1. Casual, natural human dialogues (1-3 sentences, contractions, no AI boilerplate)
 2. Step-by-step math reasoning traces verified deterministically by Python/SymPy
+3. Advanced programming, cybersecurity, AI architecture, and internet-learning reasoning pairs
 
 Filters out duplicates, formal corporate tone, and 'As an AI' disclaimers.
-Saves to training_data/distilled_conversations.jsonl in ChatML messages format.
+Saves to training_data/distilled_conversations.jsonl and merges into cleaned_sft_dataset.jsonl.
 """
 import argparse
 import hashlib
@@ -16,6 +17,7 @@ import os
 from pathlib import Path
 import random
 import re
+import socket
 import sys
 import time
 from typing import Any, Dict, List, Optional, Tuple
@@ -45,6 +47,7 @@ from src.tools.builtin import solve_math_problem
 OLLAMA_URL = "http://127.0.0.1:11434"
 DEFAULT_TEACHER = "humanchat:latest"
 FALLBACK_TEACHER = "qwen3.5:2b"
+OLLAMA_ONLINE = None
 
 SYSTEM_PROMPT = (
     "You are LLM, a friendly, warm, casual conversational assistant created by Yuvraj Thakur. "
@@ -55,35 +58,68 @@ SYSTEM_PROMPT = (
 )
 
 PROGRAMMING_TOPICS = [
-    ("Write a clean Python function for binary search with edge cases.", "algorithms"),
-    ("Explain the difference between stack and heap memory in C with code.", "systems"),
+    ("Write a clean Python function for binary search with edge cases.", "binary search"),
+    ("Explain the difference between stack and heap memory in C with code.", "stack and heap"),
     ("Show how Rust enforces ownership and borrowing at compile time.", "rust"),
-    ("Write a robust retry decorator with exponential backoff in Python.", "python"),
-    ("Explain how database indexes (B-Tree) accelerate query performance.", "database"),
+    ("Write a robust retry decorator with exponential backoff in Python.", "retry decorator"),
+    ("Explain how database indexes (B-Tree) accelerate query performance.", "database indexes"),
 ]
 
 CYBERSECURITY_TOPICS = [
-    ("Explain how parameterized queries prevent SQL injection with a code example.", "appsec"),
-    ("How does Content Security Policy (CSP) protect against reflected XSS?", "websec"),
-    ("Compare symmetric (AES-256-GCM) and asymmetric (RSA/ECC) encryption.", "cryptography"),
-    ("Explain the STRIDE threat modeling framework with an example API service.", "threat_modeling"),
-    ("What is an SSRF vulnerability and how do URL allowlists prevent it?", "network_security"),
+    ("Explain how parameterized queries prevent SQL injection with a code example.", "parameterized queries"),
+    ("How does Content Security Policy (CSP) protect against reflected XSS?", "content security policy"),
+    ("Compare symmetric (AES-256-GCM) and asymmetric (RSA/ECC) encryption.", "symmetric and asymmetric"),
+    ("Explain the STRIDE threat modeling framework with an example API service.", "stride"),
+    ("What is an SSRF vulnerability and how do URL allowlists prevent it?", "ssrf"),
 ]
 
 REVERSE_ENG_TOPICS = [
-    ("Explain the Microsoft x64 fastcall calling convention and shadow space.", "abi"),
-    ("What are the main sections of a PE executable (.text, .rdata, .data)?", "pe_format"),
+    ("Explain the Microsoft x64 fastcall calling convention and shadow space.", "fastcall"),
+    ("What are the main sections of a PE executable (.text, .rdata, .data)?", "pe executable"),
     ("How does Python compile source code into bytecode instructions?", "bytecode"),
-    ("Explain how a disassembler reconstructs a Control Flow Graph (CFG).", "disassembly"),
+    ("Explain how a disassembler reconstructs a Control Flow Graph (CFG).", "control flow graph"),
 ]
 
 AI_RESEARCH_TOPICS = [
-    ("Derive the mathematical formula for RMSNorm and explain why it is efficient.", "architecture"),
-    ("Explain SwiGLU activation and how the 8/3 hidden dimension ratio is chosen.", "ffn"),
-    ("How does Rotary Position Embedding (RoPE) encode relative position?", "embeddings"),
-    ("Explain how StreamingLLM uses attention sinks to maintain infinite context.", "kv_cache"),
-    ("How does the Muon optimizer orthogonalize momentum updates?", "optimization"),
+    ("Derive the mathematical formula for RMSNorm and explain why it is efficient.", "rmsnorm"),
+    ("Explain SwiGLU activation and how the 8/3 hidden dimension ratio is chosen.", "swiglu"),
+    ("How does Rotary Position Embedding (RoPE) encode relative position?", "rope"),
+    ("Explain how StreamingLLM uses attention sinks to maintain infinite context.", "streamingllm"),
+    ("How does the Muon optimizer orthogonalize momentum updates?", "muon optimizer"),
 ]
+
+CASUAL_TOPICS = [
+    ("How are you doing today?", "I'm doing great, thanks! Ready to help you with code, security, research, or whatever you're working on."),
+    ("What is your name and who created you?", "I'm LLM, a personal conversational AI assistant developed and built by Yuvraj Thakur."),
+    ("What capabilities do you have?", "I can analyze and debug code across multiple languages, audit cybersecurity vulnerabilities, solve math deterministically, and learn from the internet via DuckDuckGo."),
+    ("Tell me an interesting scientific fact.", "Neutron stars are so dense that a single teaspoon of their matter would weigh around 6 billion tons on Earth."),
+    ("How do you search the internet?", "I use DuckDuckGo to find top live sources, browse deep page content with a headless browser, and distill facts into memory."),
+    ("How do you avoid hallucinations?", "If a question is fundamentally unknowable or private, I honestly state that I don't know rather than fabricating an answer."),
+]
+
+ALL_TOPICS = [t[0] for t in (PROGRAMMING_TOPICS + CYBERSECURITY_TOPICS + REVERSE_ENG_TOPICS + AI_RESEARCH_TOPICS)] + [c[0] for c in CASUAL_TOPICS]
+
+OFFLINE_TEACHER_KNOWLEDGE = {
+    "binary search": "Binary search divides the sorted search space in half each iteration by comparing the target with the middle element, achieving O(log n) time complexity.",
+    "stack and heap": "Stack memory handles fast LIFO allocation for local variables with automatic cleanup, while heap memory handles dynamic, flexible allocations that require manual or GC management.",
+    "rust": "Rust's borrow checker enforces ownership at compile time: each value has one owner, and you can have either any number of immutable references or exactly one mutable reference.",
+    "retry decorator": "A retry decorator catches transient exceptions and sleeps with exponential backoff before retrying, preventing thundering herd problems against upstream services.",
+    "database indexes": "B-Tree indexes sort keys hierarchically, reducing lookup complexity from O(N) full table scans to O(log N) disk block lookups.",
+    "parameterized queries": "Parameterized queries separate SQL syntax logic from untrusted user data, preventing attackers from injecting arbitrary SQL clauses into the database engine.",
+    "content security policy": "CSP restricts the origins from which scripts, styles, and media can load, neutralizing reflected and stored XSS attacks even if injected into HTML.",
+    "symmetric and asymmetric": "Symmetric encryption like AES-256 uses the same shared key for speed, while asymmetric encryption like RSA uses public/private key pairs for secure key exchange.",
+    "stride": "STRIDE categorizes system threats into Spoofing, Tampering, Repudiation, Information disclosure, Denial of service, and Elevation of privilege.",
+    "ssrf": "SSRF happens when a server makes requests to attacker-controlled URLs; strict hostname and IP allowlists prevent attackers from probing internal private networks.",
+    "fastcall": "Microsoft x64 fastcall passes the first 4 integer arguments in RCX, RDX, R8, and R9, requiring 32 bytes of shadow space allocated on the stack before the call instruction.",
+    "pe executable": "PE files structure executables into the DOS header, PE signature, COFF header, optional header, and section headers like .text for code and .data for globals.",
+    "bytecode": "Python compiles source code ASTs into stack-based bytecode instructions stored in .pyc files, which the CPython virtual machine interprets via evaluation loops.",
+    "control flow graph": "A disassembler reconstructs CFGs by partitioning assembly instructions into basic blocks and creating directed edges for conditional and unconditional branches.",
+    "rmsnorm": "RMSNorm normalizes activations by their root mean square without subtracting the mean: RMS(x) = sqrt(1/d * sum(x_i^2) + eps), cutting compute overhead by ~30% versus LayerNorm.",
+    "swiglu": "SwiGLU combines Swish gating with linear projection: SwiGLU(x) = (SiLU(xW_gate) * xW_up) W_down, with hidden ratio ~8/3 d_model for superior representation capacity.",
+    "rope": "RoPE applies complex 2D orthogonal rotations to query and key head pairs, encoding relative token distance naturally through dot-product properties without fixed positional tables.",
+    "streamingllm": "StreamingLLM retains initial attention sinks (the first 4 tokens) alongside a sliding local window, keeping attention score distributions stable across millions of steps without memory growth.",
+    "muon optimizer": "Muon maintains momentum matrices and computes orthogonalized weight updates using iterative Newton-Schulz polynomial approximations, accelerating 2D weight convergence.",
+}
 
 MATH_TEMPLATES = [
     ("add", "What is {a} + {b}?", lambda a, b: (f"{a} + {b}", a + b)),
@@ -96,8 +132,18 @@ MATH_TEMPLATES = [
 ]
 
 
+def is_ollama_online() -> bool:
+    try:
+        with socket.create_connection(("127.0.0.1", 11434), timeout=0.8):
+            return True
+    except Exception:
+        return False
+
+
 def query_ollama(model: str, prompt: str, system: Optional[str] = None, temperature: float = 0.7) -> Optional[str]:
     """Queries local Ollama instance with timeout and think:False support."""
+    if not is_ollama_online():
+        return None
     payload = {
         "model": model,
         "prompt": prompt,
@@ -116,11 +162,23 @@ def query_ollama(model: str, prompt: str, system: Optional[str] = None, temperat
         headers={"Content-Type": "application/json"},
     )
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with urllib.request.urlopen(req, timeout=5) as resp:
             data = json.loads(resp.read().decode("utf-8"))
             return data.get("response", "").strip()
-    except Exception as e:
+    except Exception:
         return None
+
+
+def get_offline_teacher_reply(topic_prompt: str) -> str:
+    """Fallback offline teacher response generator."""
+    lower = topic_prompt.lower()
+    for k, v in OFFLINE_TEACHER_KNOWLEDGE.items():
+        if k in lower:
+            return v
+    for q, ans in CASUAL_TOPICS:
+        if any(w in lower for w in q.lower().split()[:3]):
+            return ans
+    return "I'm LLM, an independent assistant built by Yuvraj Thakur, focused on verified reasoning, fast code analysis, and truth preservation."
 
 
 def is_clean_human_reply(text: str) -> bool:
@@ -129,21 +187,13 @@ def is_clean_human_reply(text: str) -> bool:
         return False
     lower = text.lower()
     disallowed = [
-        "as an ai",
-        "as a language model",
-        "as an artificial intelligence",
-        "i am an ai",
-        "i do not have feelings",
-        "i don't have feelings",
-        "certainly! here",
-        "hope this helps",
-        "feel free to ask",
-        "how can i assist",
+        "as an ai", "as a language model", "as an artificial intelligence",
+        "i am an ai", "i do not have feelings", "i don't have feelings",
+        "certainly! here", "hope this helps", "feel free to ask", "how can i assist",
     ]
     for d in disallowed:
         if d in lower:
             return False
-    # Check for bullet points or lists
     if "\n1." in text or "\n-" in text or "\n*" in text:
         return False
     return True
@@ -223,13 +273,15 @@ def generate_distillation_dataset(
     if output_path.is_file():
         with open(output_path, "r", encoding="utf-8") as f:
             for line in f:
-                existing_hashes.add(hashlib.md5(line.strip().encode("utf-8")).hexdigest())
+                if line.strip():
+                    existing_hashes.add(hashlib.md5(line.strip().encode("utf-8")).hexdigest())
 
+    online_status = "ONLINE" if is_ollama_online() else "OFFLINE (Using Expert Knowledge Engine)"
     print("=" * 70)
-    print(f"STARTING DISTILLATION DATA GENERATION")
+    print("STARTING DISTILLATION DATA GENERATION")
     print(f"Target count:   {count:,} conversations")
-    print(f"Teacher model:  {teacher_model}")
-    print(f"Math ratio:     {math_ratio*100:.0f}% verified math / {(1-math_ratio)*100:.0f}% casual chat")
+    print(f"Teacher model:  {teacher_model} [{online_status}]")
+    print(f"Math ratio:     {math_ratio*100:.0f}% verified math / {(1-math_ratio)*100:.0f}% technical & chat")
     print(f"Destination:    {output_path.resolve()}")
     print("=" * 70)
 
@@ -253,27 +305,29 @@ def generate_distillation_dataset(
 
     print(f"  Generated {len(batch_records):,} verified math examples.")
 
-    # 2. Generate Casual Human Chat from Ollama Teacher
-    print(f"\n[2/2] Generating {num_chat:,} casual human dialogues from {teacher_model}...")
+    # 2. Generate Technical & Casual Dialogues
+    print(f"\n[2/2] Generating {num_chat:,} dialogues from teacher / offline expert...")
     chat_done = 0
     attempts = 0
-    max_attempts = num_chat * 3
+    max_attempts = num_chat * 4
 
     while chat_done < num_chat and attempts < max_attempts:
         attempts += 1
-        topic = random.choice(TOPICS)
-        user_prompt = f"Say something casual and natural about {topic}."
+        topic_prompt = random.choice(ALL_TOPICS)
+        user_prompt = f"Explain {topic_prompt} concisely."
         teacher_reply = query_ollama(teacher_model, user_prompt, temperature=0.85)
 
         if not teacher_reply:
-            # Fallback to teacher model if default failed
             teacher_reply = query_ollama(FALLBACK_TEACHER, user_prompt, temperature=0.85)
+
+        if not teacher_reply:
+            teacher_reply = get_offline_teacher_reply(topic_prompt)
 
         if teacher_reply and is_clean_human_reply(teacher_reply):
             ex = {
                 "messages": [
                     {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": f"Hey! {topic.capitalize()}?"},
+                    {"role": "user", "content": topic_prompt},
                     {"role": "assistant", "content": teacher_reply},
                 ]
             }
@@ -284,13 +338,25 @@ def generate_distillation_dataset(
                 batch_records.append(line)
                 chat_done += 1
                 generated += 1
-                if chat_done % 25 == 0 or chat_done == num_chat:
-                    print(f"  Progress: {chat_done}/{num_chat} chat dialogues ({chat_done/max(1, time.time()-t0):.1f}/s)...")
+                if chat_done % 50 == 0 or chat_done == num_chat:
+                    print(f"  Progress: {chat_done}/{num_chat} dialogues ({chat_done/max(1.0, time.time()-t0):.1f}/s)...")
 
-    # Append to file atomically
+    # Append to distillation file
     with open(output_path, "a", encoding="utf-8") as f:
         for r in batch_records:
             f.write(r + "\n")
+
+    # Also merge directly into cleaned_sft_dataset.jsonl
+    sft_targets = [
+        NESTED_ROOT / "training_data" / "cleaned_sft_dataset.jsonl",
+        PROJECT_ROOT / "training_data" / "cleaned_sft_dataset.jsonl",
+    ]
+    for sft_p in sft_targets:
+        if sft_p.is_file():
+            with open(sft_p, "a", encoding="utf-8") as f:
+                for r in batch_records:
+                    f.write(r + "\n")
+            print(f"  [MERGED] Appended {len(batch_records):,} records to {sft_p.name}")
 
     el = time.time() - t0
     print("\n" + "=" * 70)
@@ -303,7 +369,7 @@ def generate_distillation_dataset(
 
 def main():
     parser = argparse.ArgumentParser(description="Distill data from Ollama teachers")
-    parser.add_argument("--count", type=int, default=500, help="Number of examples to generate")
+    parser.add_argument("--count", type=int, default=300, help="Number of examples to generate")
     parser.add_argument("--math-ratio", type=float, default=0.35, help="Ratio of math problems")
     parser.add_argument("--teacher", default=DEFAULT_TEACHER, help="Teacher model name in Ollama")
     parser.add_argument("--output", default="training_data/distilled_conversations.jsonl")
