@@ -1,7 +1,7 @@
 """
 Creative Writing & Brainstorming Engine
 Generates structured stories, essays, poetry, dialogues, and intuitive analogies
-inspired by Claude and GPT-style expressive synthesis.
+for clear concept explanation and mental modeling.
 """
 import random
 from typing import Dict, List, Optional

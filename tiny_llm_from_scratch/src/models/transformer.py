@@ -236,6 +236,15 @@ class ModernTransformer(nn.Module):
         if config.tie_weights:
             self.lm_head.weight = self.tok_embeddings.weight
 
+        self.n_predict_tokens = getattr(config, "n_predict_tokens", 1)
+        if self.n_predict_tokens > 1:
+            self.extra_heads = nn.ModuleList([
+                nn.Linear(config.n_embd, config.vocab_size, bias=False)
+                for _ in range(self.n_predict_tokens - 1)
+            ])
+        else:
+            self.extra_heads = None
+
         self.max_seq_len = getattr(config, "max_seq_len", 1_048_576)
         if config.pos_emb == "rope":
             init_len = min(1024, max(config.block_size, 256))
@@ -299,6 +308,7 @@ class ModernTransformer(nn.Module):
         targets: Optional[torch.Tensor] = None,
         kv_caches: Optional[List[KVCache]] = None,
         start_pos: int = 0,
+        curriculum_k: int = 1,
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         B, T = idx.shape
         max_limit = getattr(self.config, "max_seq_len", 1_048_576)
@@ -322,6 +332,17 @@ class ModernTransformer(nn.Module):
         loss = None
         if targets is not None:
             loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1))
+            # Multi-token prediction loss when enabled and curriculum_k > 1
+            if self.extra_heads is not None and curriculum_k > 1:
+                active_k = min(curriculum_k, len(self.extra_heads) + 1)
+                for k_offset in range(1, active_k):
+                    if T > k_offset:
+                        head_k = self.extra_heads[k_offset - 1]
+                        logits_k = head_k(x[:, :-k_offset])
+                        targets_k = targets[:, k_offset:]
+                        loss_k = F.cross_entropy(logits_k.reshape(-1, logits_k.size(-1)), targets_k.reshape(-1))
+                        weight_k = 0.5 / k_offset
+                        loss = loss + weight_k * loss_k
 
         return logits, loss
 

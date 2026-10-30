@@ -306,6 +306,11 @@ def solve_math_problem(query: str) -> Dict[str, Any]:
     # Support common English phrasing
     clean = re.sub(r"(?i)square root of\s*(\d+(?:\.\d+)?)", r"sqrt(\1)", clean)
     clean = re.sub(r"(?i)cube root of\s*(\d+(?:\.\d+)?)", r"cbrt(\1)", clean)
+    clean = re.sub(r"(?i)\bmultiplied by\b", "*", clean)
+    clean = re.sub(r"(?i)\btimes\b", "*", clean)
+    clean = re.sub(r"(?i)\bdivided by\b", "/", clean)
+    clean = re.sub(r"(?i)\bplus\b", "+", clean)
+    clean = re.sub(r"(?i)\bminus\b", "-", clean)
 
     candidates = [clean, raw]
 
@@ -492,5 +497,35 @@ def register_builtin_tools(registry: ToolRegistry, project_root: Path = Path("."
         execute_fn=lambda query, max_results=5: __import__("src.tools.web_search", fromlist=["DuckDuckGoSearchEngine"]).DuckDuckGoSearchEngine.format_search_results(
             query,
             __import__("src.tools.web_search", fromlist=["DuckDuckGoSearchEngine"]).DuckDuckGoSearchEngine.search(query, int(max_results))
+        ),
+    ))
+
+    registry.register(ToolDefinition(
+        name="arxiv_search",
+        description="Searches ArXiv for scientific research papers (AI, CS, math, physics, quant-bio).",
+        parameters={"query": "scientific paper topic or title", "max_results": "optional maximum results (default 4)"},
+        execute_fn=lambda query, max_results=4: __import__("src.tools.free_tools", fromlist=["ArxivSearchEngine"]).ArxivSearchEngine.format_results(
+            query,
+            __import__("src.tools.free_tools", fromlist=["ArxivSearchEngine"]).ArxivSearchEngine.search(query, int(max_results))
+        ),
+    ))
+
+    registry.register(ToolDefinition(
+        name="wikipedia_summary",
+        description="Retrieves full encyclopedic summary and knowledge graph from Wikipedia.",
+        parameters={"topic": "concept, entity, or historical topic"},
+        execute_fn=lambda topic: __import__("src.tools.free_tools", fromlist=["WikipediaEngine"]).WikipediaEngine.format_summary(
+            topic,
+            __import__("src.tools.free_tools", fromlist=["WikipediaEngine"]).WikipediaEngine.summary(topic)
+        ),
+    ))
+
+    registry.register(ToolDefinition(
+        name="weather_forecast",
+        description="Retrieves live global weather, temperature, wind, and conditions for any city via Open-Meteo.",
+        parameters={"city": "city name (e.g. London, Mumbai, Tokyo, New York)"},
+        execute_fn=lambda city: __import__("src.tools.free_tools", fromlist=["WeatherEngine"]).WeatherEngine.format_weather(
+            city,
+            __import__("src.tools.free_tools", fromlist=["WeatherEngine"]).WeatherEngine.get_weather(city)
         ),
     ))

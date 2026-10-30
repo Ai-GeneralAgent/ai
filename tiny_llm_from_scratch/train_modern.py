@@ -29,6 +29,9 @@ def main():
     parser.add_argument("--grad-accum", type=int, default=2)
     parser.add_argument("--lr", type=float, default=3e-4)
     parser.add_argument("--block-size", type=int, default=256)
+    parser.add_argument("--preset", choices=["tiny", "small", "25m", "1m"], default="small", help="Architecture preset: tiny (~1.6M), small (~2.8M), 25m (~27.3M), 1m (~2.8M 1M context)")
+    parser.add_argument("--optimizer", choices=["adamw", "muon"], default="adamw", help="muon = Muon for hidden weights + AdamW for embeddings/norms")
+    parser.add_argument("--muon-lr", type=float, default=0.02)
     parser.add_argument("--eval-interval", type=int, default=25)
     parser.add_argument("--run-name", default="modern_production_v2")
     parser.add_argument("--max-time", type=float, default=None, help="Maximum training duration in seconds (e.g. 1200 for 20 mins)")
@@ -98,7 +101,15 @@ def main():
         best_val_loss = payload.get("val_loss", float("inf"))
         print(f"[RESUME] Loaded model from: {resume_p.name} (step {initial_step}, val_loss {best_val_loss})")
     else:
-        cfg = ModelConfig.preset_small(vocab_size=tokenizer.get_vocab_size())
+        vocab_sz = tokenizer.get_vocab_size()
+        if args.preset == "25m":
+            cfg = ModelConfig.preset_25m(vocab_size=vocab_sz)
+        elif args.preset == "tiny":
+            cfg = ModelConfig.preset_tiny(vocab_size=vocab_sz)
+        elif args.preset == "1m":
+            cfg = ModelConfig.preset_1m(vocab_size=vocab_sz)
+        else:
+            cfg = ModelConfig.preset_small(vocab_size=vocab_sz)
         cfg.block_size = args.block_size
         model = ModernTransformer(cfg)
 
@@ -121,9 +132,19 @@ def main():
         output_dir=str(PROJECT_ROOT / "checkpoints"),
         run_name=args.run_name,
         device=device,
+        optimizer=args.optimizer,
+        muon_lr=args.muon_lr,
     )
 
     trainer = Trainer(model, t_cfg, cache, tok_path)
+    if args.resume:
+        opt_state = payload.get("optimizer_state_dict")
+        if opt_state is not None:
+            try:
+                trainer.optimizer.load_state_dict(opt_state)
+                print("[RESUME] Restored AdamW optimizer state.")
+            except Exception as exc:
+                print(f"[RESUME] Optimizer state not restored ({exc}); Adam restarts cold.")
     if initial_step > 0:
         trainer.set_resume_state(initial_step, best_val_loss)
 

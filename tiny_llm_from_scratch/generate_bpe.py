@@ -62,6 +62,9 @@ def main():
     # If user passed a directory, resolve to the best checkpoint inside it
     if path.is_dir():
         candidates = [
+            path / "modern_chat_assistant.pt",
+            path / "modern_master_v3_best.pt",
+            path / "modern_master_v3_latest.pt",
             path / "modern_master_20min_best.pt",
             path / "modern_chat_finetuned.pt",
             path / "modern_production_v2_best.pt",

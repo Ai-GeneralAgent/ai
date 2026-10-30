@@ -62,8 +62,11 @@ def discover_best_checkpoint(project_root: Path, requested: Optional[str] = None
             return p
 
     candidates = [
-        project_root / "checkpoints" / "modern_master_20min_best.pt",
+        project_root / "checkpoints" / "modern_chat_finetuned_best.pt",
         project_root / "checkpoints" / "modern_chat_finetuned.pt",
+        project_root / "checkpoints" / "modern_chat_assistant.pt",
+        project_root / "checkpoints" / "modern_master_v3_best.pt",
+        project_root / "checkpoints" / "modern_master_v3_latest.pt",
         project_root / "checkpoints" / "modern_production_v2_best.pt",
         project_root / "checkpoints" / "modern_master_v2_10k_base.pt",
         project_root / "checkpoints" / "modern_base_v2_best.pt",
@@ -117,18 +120,19 @@ def load_model_safely(ckpt_path: Path, device: str):
         return None, f"Unrecognized format ({ckpt_format})"
 
 
-def print_banner(model_name: str, model_desc: str, device: str, rag_chunks: int, tool_count: int):
+def print_banner(model_name: str, model_desc: str, device: str, rag_chunks: int, tool_count: int, active_mode: str = "assistant-chat"):
     print(f"\n{C.CYAN}{C.BOLD}{'=' * 68}")
-    print("   MODERN TINY LLM AI ASSISTANT (v2.2.0) - CLAUDE & DEEP REASONING")
+    print("   NEURAL AI ASSISTANT (v2.2.0) - CONVERSATIONAL SYSTEM")
     print(f"{'=' * 68}{C.RESET}")
     print(f" {C.WHITE}Model:{C.RESET}         {C.GREEN}{model_name}{C.RESET} ({model_desc})")
+    print(f" {C.WHITE}Mode:{C.RESET}          {C.GREEN if active_mode == 'assistant-chat' else C.YELLOW}{active_mode.upper()}{C.RESET} | Toggle via {C.YELLOW}/mode [chat|completion]{C.RESET}")
     print(f" {C.WHITE}Hardware:{C.RESET}      {C.YELLOW}{device.upper()}{C.RESET} | {C.WHITE}Context Window:{C.RESET} {C.GREEN}1,048,576 (1M) Tokens Active{C.RESET}")
     print(f" {C.WHITE}Web Engine:{C.RESET}    {C.CYAN}DuckDuckGo Live Search & Knowledge Graphs Active{C.RESET}")
     print(f" {C.WHITE}Acceleration:{C.RESET}  {C.GREEN}KV-Cache O(1) + StreamingLLM Sinks + Chunked Prefill{C.RESET}")
     print(f" {C.WHITE}RAG Knowledge:{C.RESET} {C.MAGENTA}{rag_chunks:,} chunks indexed{C.RESET} | {C.WHITE}Memory:{C.RESET} {C.GREEN}SQLite persistent{C.RESET}")
-    print(f" {C.WHITE}Solvers:{C.RESET}        {C.CYAN}Deterministic Algebra, Code Sandbox, Claude Artifacts{C.RESET}")
+    print(f" {C.WHITE}Solvers:{C.RESET}        {C.CYAN}Deterministic Algebra, Code Sandbox, Structured Artifacts{C.RESET}")
     print(f"{C.GRAY}{'-' * 68}{C.RESET}")
-    print(f" Type your prompt or command. {C.YELLOW}/help{C.RESET} for all available commands.")
+    print(f" Type your message or command. {C.YELLOW}/help{C.RESET} for all available commands.")
     print(f"{C.GRAY}{'=' * 68}{C.RESET}\n")
 
 
@@ -136,27 +140,31 @@ def print_help():
     print(f"\n{C.BOLD}{C.CYAN}--- AVAILABLE COMMANDS ---{C.RESET}")
     print(f"  {C.YELLOW}/help{C.RESET}                Show this command manual")
     print(f"  {C.YELLOW}/exit{C.RESET} or {C.YELLOW}/quit{C.RESET}         Exit the assistant")
+    print(f"  {C.YELLOW}/mode [chat|completion]{C.RESET} Toggle between Assistant-Chat (default) and Text-Completion")
     print(f"  {C.YELLOW}/search <query>{C.RESET}      Search the live web using DuckDuckGo with live citations")
     print(f"  {C.YELLOW}/web <query>{C.RESET}         Alias for live DuckDuckGo web search")
+    print(f"  {C.YELLOW}/arxiv <query>{C.RESET}       Search ArXiv open repository for academic research papers")
+    print(f"  {C.YELLOW}/wiki <topic>{C.RESET}        Look up detailed encyclopedic knowledge on Wikipedia")
+    print(f"  {C.YELLOW}/weather <city>{C.RESET}      Get real-time global weather and conditions via Open-Meteo")
     print(f"  {C.YELLOW}/context [len]{C.RESET}       View or adjust 1M context window limit (1,048,576 tokens)")
-    print(f"  {C.YELLOW}/artifacts{C.RESET}           Extract and render Claude-style structured code/diagram cards")
-    print(f"  {C.YELLOW}/think [on|off]{C.RESET}      Toggle Claude/ChatGPT-style internal thinking traces")
+    print(f"  {C.YELLOW}/artifacts{C.RESET}           Extract and render structured code/diagram cards")
+    print(f"  {C.YELLOW}/think [on|off]{C.RESET}      Toggle internal reasoning traces")
     print(f"  {C.YELLOW}/stream [on|off]{C.RESET}     Toggle real-time streaming token generation")
     print(f"  {C.YELLOW}/rag [on|off]{C.RESET}        Enable/disable local RAG document retrieval")
     print(f"  {C.YELLOW}/rag search <query>{C.RESET}  Search local knowledge corpus and view citations")
     print(f"  {C.YELLOW}/tools{C.RESET}               List all registered tool schemas and permissions")
-    print(f"  {C.YELLOW}/calc <query>{C.RESET}        Run math solver (e.g. /calc 2x+10=50, /calc 20% of 150, /calc 100 km to mi)")
-    print(f"  {C.YELLOW}/study <file>{C.RESET}         Study textbook (Grades 1-12): extract concepts, flashcards, & index RAG")
+    print(f"  {C.YELLOW}/calc <query>{C.RESET}        Run math solver (e.g. /calc 17 multiplied by 19, /calc 2x+10=50)")
+    print(f"  {C.YELLOW}/study <file>{C.RESET}         Study textbook (Grades 1-12): extract concepts & index RAG")
     print(f"  {C.YELLOW}/code <snippet>{C.RESET}       Execute Python snippet safely in sandbox with stdout capture")
-    print(f"  {C.YELLOW}/creative <prompt>{C.RESET}   Generate Claude-style intuitive analogies & creative mental models")
+    print(f"  {C.YELLOW}/creative <prompt>{C.RESET}   Generate intuitive analogies & mental models")
     print(f"  {C.YELLOW}/model{C.RESET}               List available checkpoints in checkpoints/")
     print(f"  {C.YELLOW}/model <filename>{C.RESET}    Switch active checkpoint on the fly")
-    print(f"  {C.YELLOW}/temp <float>{C.RESET}        Set temperature (default: 0.70)")
+    print(f"  {C.YELLOW}/temp <float>{C.RESET}        Set temperature (default: 0.55)")
     print(f"  {C.YELLOW}/tokens <int>{C.RESET}        Set max generated tokens (default: 120)")
     print(f"  {C.YELLOW}/topp <float>{C.RESET}        Set nucleus top-p sampling (default: 0.90)")
     print(f"  {C.YELLOW}/history{C.RESET}             Show recent messages from SQLite memory")
     print(f"  {C.YELLOW}/clear{C.RESET}               Clear current conversation memory context")
-    print(f"  {C.YELLOW}/stats{C.RESET}               Show system parameters, RAM, context window, and acceleration metrics")
+    print(f"  {C.YELLOW}/stats{C.RESET}               Show system parameters, RAM, context window, and metrics")
     print(f"  {C.YELLOW}/system <prompt>{C.RESET}     Set active system persona / prompt")
     print(f"{C.GRAY}{'-' * 40}{C.RESET}\n")
 
@@ -204,12 +212,19 @@ def launch_cli():
     tools = ToolRegistry()
     register_builtin_tools(tools, project_root)
 
-    # Initialize RAG
+    # Initialize RAG (Curriculum Textbooks, Math, Science, Philosophy, QA)
     rag = LocalRAGPipeline()
+    curriculum_dir = project_root / "training_data" / "curriculum_textbooks"
+    if curriculum_dir.is_dir():
+        for doc in sorted(curriculum_dir.glob("*.txt"))[:80]:
+            rag.add_document(doc)
+    qa_readable = project_root / "training_data" / "qa_instructions" / "qa_10k_readable.txt"
+    if qa_readable.is_file():
+        rag.add_document(qa_readable)
     knowledge_dir = project_root / "data_knowledge"
     if knowledge_dir.is_dir():
         docs = list(knowledge_dir.rglob("*.txt"))
-        for doc in docs[:100]:
+        for doc in docs[:50]:
             rag.add_document(doc)
     elif (project_root / "alice.txt").is_file():
         rag.add_document(project_root / "alice.txt")
@@ -224,17 +239,19 @@ def launch_cli():
     active_ckpt_path = discover_best_checkpoint(project_root, args.checkpoint)
     model, model_desc = load_model_safely(active_ckpt_path, device=device)
 
-    # Generation Config
+    # Generation Config & Mode
+    current_mode = "assistant-chat"  # Default mode: assistant-chat (alternative: text-completion)
     sampling_cfg = SamplingConfig(
         temperature=args.temperature,
         top_k=args.top_k,
         top_p=args.top_p,
         max_new_tokens=args.tokens,
+        repetition_penalty=1.20,
     )
     stream_output = True
     show_thinking = True
     rag_enabled = args.rag
-    system_persona = "You are a helpful, precise AI assistant powered by Modern Transformer v2."
+    system_persona = "You are a helpful, precise AI assistant."
     last_response = ""
 
     # Show Banner
@@ -244,6 +261,7 @@ def launch_cli():
         device=device,
         rag_chunks=len(rag.chunks),
         tool_count=len(tools.list_tools()),
+        active_mode=current_mode,
     )
 
     # Main Interactive REPL
@@ -408,15 +426,35 @@ def launch_cli():
                 last_response = formatted
             continue
 
-        elif lead == "/artifacts":
-            from ..generation.artifacts import ClaudeArtifactEngine
-            arts = ClaudeArtifactEngine.extract_artifacts(last_response)
-            if not arts:
-                print(f"{C.YELLOW}No structured code or diagram artifacts found in the last response.{C.RESET}")
+        elif lead == "/mode":
+            if len(cmd) > 1:
+                submode = cmd[1].lower().strip()
+                if submode in ["chat", "assistant", "assistant-chat"]:
+                    current_mode = "assistant-chat"
+                    sampling_cfg.temperature = 0.55
+                    sampling_cfg.top_p = 0.90
+                    print(f"{C.GREEN}[Mode switched to: Assistant-Chat (Answers user requests, intent-aware, natural conversation)]{C.RESET}")
+                elif submode in ["completion", "text", "text-completion"]:
+                    current_mode = "text-completion"
+                    sampling_cfg.temperature = 0.75
+                    sampling_cfg.top_p = 0.92
+                    print(f"{C.YELLOW}[Mode switched to: Text-Completion (Raw causal continuation for stories and book modeling)]{C.RESET}")
+                else:
+                    print(f"{C.RED}Usage: /mode chat OR /mode completion{C.RESET}")
             else:
-                print(f"\n{C.CYAN}{C.BOLD}--- CLAUDE ARTIFACTS ({len(arts)} extracted) ---{C.RESET}\n")
+                print(f"{C.WHITE}Active Mode:{C.RESET} {C.GREEN if current_mode == 'assistant-chat' else C.YELLOW}{current_mode.upper()}{C.RESET}")
+                print(f"{C.GRAY}Switch modes using: /mode chat OR /mode completion{C.RESET}")
+            continue
+
+        elif lead == "/artifacts":
+            from ..generation.artifacts import ArtifactEngine
+            arts = ArtifactEngine.extract_artifacts(last_response)
+            if not arts:
+                print(f"{C.YELLOW}No structured code, table, or diagram artifacts found in the last response.{C.RESET}")
+            else:
+                print(f"\n{C.CYAN}{C.BOLD}--- STRUCTURED ARTIFACTS ({len(arts)} extracted) ---{C.RESET}\n")
                 for a in arts:
-                    print(ClaudeArtifactEngine.format_artifact_display(a))
+                    print(ArtifactEngine.format_artifact_display(a))
                     print()
             continue
 
@@ -436,6 +474,45 @@ def launch_cli():
                 print(f"  {C.WHITE}Max Sequence Capacity:{C.RESET} {cur_limit:,} tokens (1 Million token capability)")
                 print(f"  {C.WHITE}RoPE Scaling Type:{C.RESET}     YaRN / Dynamic NTK Extended")
                 print(f"  {C.WHITE}Streaming Cache:{C.RESET}       StreamingLLM with Attention Sinks ({sw})\n")
+            continue
+
+        elif lead == "/arxiv":
+            arxiv_q = " ".join(user_input.split()[1:])
+            if not arxiv_q:
+                print(f"{C.RED}Usage: /arxiv <research topic or paper title>{C.RESET}")
+            else:
+                from ..tools.free_tools import ArxivSearchEngine
+                print(f"{C.GRAY}Searching ArXiv repository: '{arxiv_q}'...{C.RESET}")
+                papers = ArxivSearchEngine.search(arxiv_q, max_results=4)
+                formatted = ArxivSearchEngine.format_results(arxiv_q, papers)
+                print(f"\n{formatted}\n")
+                last_response = formatted
+            continue
+
+        elif lead == "/wiki":
+            wiki_q = " ".join(user_input.split()[1:])
+            if not wiki_q:
+                print(f"{C.RED}Usage: /wiki <concept or topic>{C.RESET}")
+            else:
+                from ..tools.free_tools import WikipediaEngine
+                print(f"{C.GRAY}Querying Wikipedia: '{wiki_q}'...{C.RESET}")
+                w_res = WikipediaEngine.summary(wiki_q)
+                formatted = WikipediaEngine.format_summary(wiki_q, w_res)
+                print(f"\n{formatted}\n")
+                last_response = formatted
+            continue
+
+        elif lead == "/weather":
+            city_q = " ".join(user_input.split()[1:])
+            if not city_q:
+                print(f"{C.RED}Usage: /weather <city name>{C.RESET}")
+            else:
+                from ..tools.free_tools import WeatherEngine
+                print(f"{C.GRAY}Retrieving Open-Meteo live weather: '{city_q}'...{C.RESET}")
+                w_data = WeatherEngine.get_weather(city_q)
+                formatted = WeatherEngine.format_weather(city_q, w_data)
+                print(f"\n{formatted}\n")
+                last_response = formatted
             continue
 
         elif lead == "/model":
@@ -504,6 +581,36 @@ def launch_cli():
             print(f"{C.GRAY}{'-' * 40}{C.RESET}\n")
             continue
 
+        elif lead == "/memory":
+            print(f"\n{C.BOLD}{C.CYAN}--- AI HIPPOCAMPUS (TIERED DURABLE MEMORY) ---{C.RESET}")
+            if hasattr(orchestrator, "hippocampus"):
+                mem = orchestrator.hippocampus
+                with mem._get_connection() as conn:
+                    facts = conn.execute("SELECT * FROM durable_facts ORDER BY confidence DESC, recall_count DESC").fetchall()
+                    if not facts:
+                        print(f"  {C.GRAY}No durable memories stored yet. Converse naturally to store facts.{C.RESET}")
+                    else:
+                        print(f"  {C.GREEN}Total Stored Durable Facts: {len(facts)}{C.RESET}\n")
+                        for f in facts:
+                            print(f"  {C.YELLOW}[{f['category'].upper()}]{C.RESET} {f['content']}")
+                            print(f"    {C.GRAY}Confidence: {f['confidence']*100:.0f}% | Recalled: {f['recall_count']} times{C.RESET}")
+            print(f"{C.GRAY}{'-' * 40}{C.RESET}\n")
+            continue
+
+        elif lead == "/sleep":
+            print(f"\n{C.BOLD}{C.MAGENTA}--- TRIGGERING NIGHTLY 'SLEEP' WEIGHT CONSOLIDATION ---{C.RESET}")
+            try:
+                from ..training.sleep_trainer import SleepConsolidationEngine
+                engine = SleepConsolidationEngine(project_root=project_root)
+                res = engine.run_sleep_cycle(steps=30, max_time_sec=180)
+                if res.get("promoted"):
+                    print(f"{C.GREEN}[SUCCESS] Sleep cycle finished. New memories consolidated into weights without regression!{C.RESET}")
+                else:
+                    print(f"{C.YELLOW}[ROLLED BACK] Sleep candidate caused regression on anchor benchmark. Weights preserved safely.{C.RESET}")
+            except Exception as e:
+                print(f"{C.RED}Sleep consolidation error: {e}{C.RESET}")
+            continue
+
         elif lead == "/clear":
             session_id = f"session_{int(time.time())}"
             memory.create_session(session_id, "Interactive Terminal CLI")
@@ -539,15 +646,43 @@ def launch_cli():
             print(f"{C.GRAY}{'-' * 40}{C.RESET}\n")
             continue
 
-        # Standard Processing: Store in SQLite Memory
-        memory.add_message(session_id, "user", user_input)
         generator = TextGenerator(model, tokenizer) if model else None
 
-        # Stage 1: Prepare Reasoning, Intent, Thinking, and Tools
-        t0 = time.time()
-        prep = orchestrator.prepare_reasoning(user_input)
+        # Mode A: Text Completion (Raw Causal Language Continuation)
+        if current_mode == "text-completion":
+            t0 = time.time()
+            print(f"\n{C.BOLD}{C.YELLOW}MODEL [completion] > {C.RESET}", end="")
+            sys.stdout.flush()
+            if not generator:
+                print("Model weights not loaded. Please select a valid checkpoint via /model.")
+                continue
+            prompt_ids = tokenizer.encode(user_input).ids
+            if stream_output:
+                pieces = []
+                for chunk in generator.generate_stream(prompt_ids, config=sampling_cfg, device=device):
+                    sys.stdout.write(chunk)
+                    sys.stdout.flush()
+                    pieces.append(chunk)
+                print()
+                last_response = user_input + "".join(pieces)
+            else:
+                raw_text = generator.generate(user_input, config=sampling_cfg, device=device)
+                print(raw_text)
+                last_response = raw_text
+            elapsed = time.time() - t0
+            print(f"{C.GRAY}({elapsed:.2f}s){C.RESET}")
+            continue
 
-        # Display Claude/ChatGPT-style internal thinking trace if enabled
+        # Mode B: Assistant Chat Mode (Default)
+        # Store user turn in SQLite Memory
+        memory.add_message(session_id, "user", user_input)
+        recent_history = memory.get_messages(session_id, limit=6)
+
+        # Stage 1: Prepare Reasoning, Intent, Thinking, and Tools with Conversation Context
+        t0 = time.time()
+        prep = orchestrator.prepare_reasoning(user_input, conversation_history=recent_history)
+
+        # Display internal thinking trace if enabled
         if show_thinking and prep.thinking:
             print(f"\n{C.GRAY}╭─ <thinking> ────────────────────────────────────────{C.RESET}")
             for t_line in prep.thinking.splitlines():
@@ -555,7 +690,7 @@ def launch_cli():
             print(f"{C.GRAY}╰─────────────────────────────────────────────────────{C.RESET}")
 
         # Print AI Header
-        print(f"\n{C.BOLD}{C.CYAN}AI {C.YELLOW}[{prep.intent}]{C.CYAN} > {C.RESET}", end="")
+        print(f"\n{C.BOLD}{C.CYAN}ASSISTANT {C.YELLOW}[{prep.intent}]{C.CYAN} > {C.RESET}", end="")
         sys.stdout.flush()
 
         # Stage 2: Execution / Output
@@ -568,13 +703,13 @@ def launch_cli():
                 final_text = "Model weights not loaded. Please select a valid checkpoint via /model."
                 print(final_text)
             else:
-                grounded_prompt = (
-                    f"{prep.prompt_with_context}\n\n"
-                    f"[Reasoning Guidance]:\n{prep.thinking}\n\n"
-                    f"Assistant:"
-                )
+                from ..generation.template import ChatTemplate, ChatMessage
+                chat_template = ChatTemplate()
+                formatted_prompt = chat_template.format([
+                    ChatMessage(role=m["role"], content=m["content"]) for m in recent_history
+                ])
                 if stream_output:
-                    prompt_ids = tokenizer.encode(grounded_prompt).ids
+                    prompt_ids = tokenizer.encode(formatted_prompt).ids
                     pieces = []
                     for chunk in generator.generate_stream(prompt_ids, config=sampling_cfg, device=device):
                         sys.stdout.write(chunk)
@@ -582,10 +717,12 @@ def launch_cli():
                         pieces.append(chunk)
                     print()
                     raw_text = "".join(pieces)
-                    final_text = OutputOptimizer.optimize(raw_text, thinking_trace=prep.thinking, intent=prep.intent)
+                    final_text = chat_template.extract_assistant_response(raw_text)
+                    final_text = OutputOptimizer.optimize(final_text, thinking_trace=prep.thinking, intent=prep.intent)
                 else:
-                    raw_text = generator.generate(grounded_prompt, config=sampling_cfg, device=device)
-                    final_text = OutputOptimizer.optimize(raw_text, thinking_trace=prep.thinking, intent=prep.intent)
+                    raw_text = generator.generate(formatted_prompt, config=sampling_cfg, device=device)
+                    final_text = chat_template.extract_assistant_response(raw_text)
+                    final_text = OutputOptimizer.optimize(final_text, thinking_trace=prep.thinking, intent=prep.intent)
                     print(final_text)
 
             from ..reasoning.verifier import ResponseVerifier
@@ -595,6 +732,10 @@ def launch_cli():
             ]
             if prep.retrieved_citations:
                 verifications.append(ResponseVerifier.verify_citations(final_text, prep.retrieved_citations).to_dict())
+
+        # Save assistant response to memory for multi-turn history continuity
+        memory.add_message(session_id, "assistant", final_text)
+        last_response = final_text
 
         elapsed = time.time() - t0
 

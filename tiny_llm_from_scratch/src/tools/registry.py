@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, Iterable, List, Optional, Set
 import time
 
 
@@ -14,14 +14,19 @@ class ToolDefinition:
 
 
 class ToolRegistry:
-    """Type-safe registry of tools with argument validation and permission controls."""
+    """Type-safe registry of tools with argument validation, strict allowlist, and permission controls."""
 
-    def __init__(self):
+    def __init__(self, allowlist: Optional[Iterable[str]] = None):
         self.tools: Dict[str, ToolDefinition] = {}
         self.execution_log: List[Dict[str, Any]] = []
+        self.allowlist: Optional[Set[str]] = set(allowlist) if allowlist is not None else None
 
     def register(self, tool: ToolDefinition):
         self.tools[tool.name] = tool
+
+    def set_allowlist(self, allowed_tools: Optional[Iterable[str]]):
+        """Sets or updates the active tool allowlist (principle of least privilege)."""
+        self.allowlist = set(allowed_tools) if allowed_tools is not None else None
 
     def get_tool(self, name: str) -> Optional[ToolDefinition]:
         return self.tools.get(name)
@@ -35,14 +40,33 @@ class ToolRegistry:
                 "requires_approval": t.requires_approval,
             }
             for t in self.tools.values()
+            if self.allowlist is None or t.name in self.allowlist
         ]
 
     def execute(self, name: str, arguments: Dict[str, Any], user_approved: bool = False) -> Dict[str, Any]:
-        """Validates parameters, checks permissions, and executes tool safely."""
+        """Validates allowlist, parameters, checks permissions, and executes tool safely."""
+        # 1. Enforce strict allowlist policy
+        if self.allowlist is not None and name not in self.allowlist:
+            log_entry = {
+                "tool": name,
+                "arguments": arguments,
+                "success": False,
+                "error": f"Tool '{name}' is not permitted by active allowlist policy.",
+                "elapsed_sec": 0.0,
+            }
+            self.execution_log.append(log_entry)
+            return {
+                "success": False,
+                "error": f"Tool '{name}' is blocked by active tool allowlist policy.",
+                "allowlist_violation": True,
+            }
+
+        # 2. Check if tool is registered
         tool = self.get_tool(name)
         if not tool:
             return {"success": False, "error": f"Tool '{name}' is not registered."}
 
+        # 3. Check explicit approval requirements
         if tool.requires_approval and not user_approved:
             return {
                 "success": False,
@@ -50,7 +74,10 @@ class ToolRegistry:
                 "pending_approval": True,
             }
 
-        # Parameter validation
+        # 4. Parameter validation
+        if not isinstance(arguments, dict):
+            return {"success": False, "error": "Arguments must be provided as a dictionary."}
+
         for param, param_type in tool.parameters.items():
             if param not in arguments:
                 return {"success": False, "error": f"Missing required parameter '{param}'"}
@@ -78,4 +105,5 @@ class ToolRegistry:
             }
             self.execution_log.append(log_entry)
             return {"success": False, "error": f"Tool execution failed: {str(e)}"}
+
 

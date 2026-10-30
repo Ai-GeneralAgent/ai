@@ -32,9 +32,15 @@ class ChatTemplate:
         return "\n".join(formatted_turns)
 
     def extract_assistant_response(self, raw_output: str) -> str:
-        """Strips future turn triggers if the model generates them."""
-        for stop in ["### User:", "### System:", "### Tool"]:
-            if stop in raw_output:
-                raw_output = raw_output.split(stop)[0]
-        return raw_output.strip()
+        """Strips future turn triggers and stop tokens if the model generates them."""
+        stop_tokens = [
+            "### User:", "### System:", "### Tool", "### Assistant:",
+            "\nUser:", "\nAssistant:", "\nSystem:",
+            "<|endoftext|>", "<|im_end|>", "<|im_start|>"
+        ]
+        clean_text = raw_output
+        for stop in stop_tokens:
+            if stop in clean_text:
+                clean_text = clean_text.split(stop)[0]
+        return clean_text.strip()
 

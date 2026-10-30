@@ -1,0 +1,200 @@
+{"id": 1, "domain": "Science", "q": "What organ in the human body pumps blood?", "a": "heart", "keywords": ["heart"]}
+{"id": 2, "domain": "Science", "q": "What gas do plants primarily absorb during photosynthesis?", "a": "carbon dioxide", "keywords": ["carbon dioxide", "co2"]}
+{"id": 3, "domain": "Science", "q": "What molecule carries genetic instructions in living organisms?", "a": "DNA", "keywords": ["dna", "deoxyribonucleic"]}
+{"id": 4, "domain": "Science", "q": "What is the powerhouse organelle of the eukaryotic cell?", "a": "mitochondria", "keywords": ["mitochondria", "mitochondrion"]}
+{"id": 5, "domain": "Science", "q": "What type of blood cells fight infections in the human body?", "a": "white blood cells", "keywords": ["white blood cell", "leukocyte", "white blood cells"]}
+{"id": 6, "domain": "Science", "q": "What is the chemical symbol for gold?", "a": "Au", "keywords": ["au"]}
+{"id": 7, "domain": "Science", "q": "What is the chemical symbol for iron?", "a": "Fe", "keywords": ["fe"]}
+{"id": 8, "domain": "Science", "q": "What is the primary gas found in Earth's atmosphere?", "a": "nitrogen", "keywords": ["nitrogen"]}
+{"id": 9, "domain": "Science", "q": "What planet is closest to the Sun?", "a": "Mercury", "keywords": ["mercury"]}
+{"id": 10, "domain": "Science", "q": "What is the largest planet in our solar system?", "a": "Jupiter", "keywords": ["jupiter"]}
+{"id": 11, "domain": "Science", "q": "How many bones are in the adult human body?", "a": "206", "keywords": ["206"]}
+{"id": 12, "domain": "Science", "q": "What pigment gives plants their green color?", "a": "chlorophyll", "keywords": ["chlorophyll"]}
+{"id": 13, "domain": "Science", "q": "What part of the brain controls balance and coordination?", "a": "cerebellum", "keywords": ["cerebellum"]}
+{"id": 14, "domain": "Science", "q": "What mineral is essential for strong human bones and teeth?", "a": "calcium", "keywords": ["calcium"]}
+{"id": 15, "domain": "Science", "q": "What is the center of an atom called?", "a": "nucleus", "keywords": ["nucleus"]}
+{"id": 16, "domain": "Science", "q": "What subatomic particle carries a negative electric charge?", "a": "electron", "keywords": ["electron"]}
+{"id": 17, "domain": "Science", "q": "What subatomic particle carries a positive electric charge?", "a": "proton", "keywords": ["proton"]}
+{"id": 18, "domain": "Science", "q": "What is the chemical formula for table salt?", "a": "NaCl", "keywords": ["nacl", "sodium chloride"]}
+{"id": 19, "domain": "Science", "q": "What is the hardest known natural mineral on Earth?", "a": "diamond", "keywords": ["diamond"]}
+{"id": 20, "domain": "Science", "q": "What planet is famously known as the Red Planet?", "a": "Mars", "keywords": ["mars"]}
+{"id": 21, "domain": "Science", "q": "What force pulls objects toward the center of the Earth?", "a": "gravity", "keywords": ["gravity", "gravitational"]}
+{"id": 22, "domain": "Science", "q": "What layer of the atmosphere protects Earth from harmful ultraviolet radiation?", "a": "ozone layer", "keywords": ["ozone"]}
+{"id": 23, "domain": "Science", "q": "What mammal is known to be capable of true sustained flight?", "a": "bat", "keywords": ["bat", "bats"]}
+{"id": 24, "domain": "Science", "q": "What is the largest living mammal on Earth?", "a": "blue whale", "keywords": ["blue whale", "whale"]}
+{"id": 25, "domain": "Science", "q": "What organ filters waste products from human blood?", "a": "kidney", "keywords": ["kidney", "kidneys"]}
+{"id": 26, "domain": "Science", "q": "What is the chemical symbol for potassium?", "a": "K", "keywords": ["k"]}
+{"id": 27, "domain": "Science", "q": "What gas do humans inhale that is vital for cellular respiration?", "a": "oxygen", "keywords": ["oxygen", "o2"]}
+{"id": 28, "domain": "Science", "q": "What instrument is used to measure atmospheric air pressure?", "a": "barometer", "keywords": ["barometer"]}
+{"id": 29, "domain": "Science", "q": "What process converts liquid water into water vapor?", "a": "evaporation", "keywords": ["evaporation", "vaporization"]}
+{"id": 30, "domain": "Science", "q": "What is the pH value of pure water at room temperature?", "a": "7", "keywords": ["7", "neutral"]}
+{"id": 31, "domain": "Science", "q": "What is the fastest land animal in the world?", "a": "cheetah", "keywords": ["cheetah"]}
+{"id": 32, "domain": "Science", "q": "Which blood type is known as the universal donor for red blood cells?", "a": "O negative", "keywords": ["o negative", "o-", "o neg"]}
+{"id": 33, "domain": "Science", "q": "What is molten rock called before it reaches the Earth's surface?", "a": "magma", "keywords": ["magma"]}
+{"id": 34, "domain": "Science", "q": "What is molten rock called once it erupts onto the Earth's surface?", "a": "lava", "keywords": ["lava"]}
+{"id": 35, "domain": "Science", "q": "Which part of a plant absorbs water and minerals from the soil?", "a": "roots", "keywords": ["root", "roots"]}
+{"id": 36, "domain": "Science", "q": "What is the primary element found in organic molecules?", "a": "carbon", "keywords": ["carbon"]}
+{"id": 37, "domain": "Science", "q": "What celestial body causes ocean tides on Earth?", "a": "Moon", "keywords": ["moon"]}
+{"id": 38, "domain": "Science", "q": "How many chromosomes are in a normal human somatic cell?", "a": "46", "keywords": ["46", "23 pairs"]}
+{"id": 39, "domain": "Science", "q": "What type of lenses are used to correct nearsightedness (myopia)?", "a": "concave lenses", "keywords": ["concave", "diverging"]}
+{"id": 40, "domain": "Science", "q": "What is the study of fossils called?", "a": "paleontology", "keywords": ["paleontology"]}
+{"id": 41, "domain": "Geography", "q": "What is the capital city of France?", "a": "Paris", "keywords": ["paris"]}
+{"id": 42, "domain": "Geography", "q": "What is the capital city of Japan?", "a": "Tokyo", "keywords": ["tokyo"]}
+{"id": 43, "domain": "Geography", "q": "What is the capital city of India?", "a": "New Delhi", "keywords": ["new delhi", "delhi"]}
+{"id": 44, "domain": "Geography", "q": "What is the capital city of Germany?", "a": "Berlin", "keywords": ["berlin"]}
+{"id": 45, "domain": "Geography", "q": "What is the capital city of Australia?", "a": "Canberra", "keywords": ["canberra"]}
+{"id": 46, "domain": "Geography", "q": "What is the capital city of Canada?", "a": "Ottawa", "keywords": ["ottawa"]}
+{"id": 47, "domain": "Geography", "q": "What is the capital city of Italy?", "a": "Rome", "keywords": ["rome"]}
+{"id": 48, "domain": "Geography", "q": "What is the capital city of Spain?", "a": "Madrid", "keywords": ["madrid"]}
+{"id": 49, "domain": "Geography", "q": "What is the capital city of Egypt?", "a": "Cairo", "keywords": ["cairo"]}
+{"id": 50, "domain": "Geography", "q": "What is the capital city of Brazil?", "a": "Brasilia", "keywords": ["brasilia"]}
+{"id": 51, "domain": "Geography", "q": "What is the longest river in the world?", "a": "Nile River", "keywords": ["nile"]}
+{"id": 52, "domain": "Geography", "q": "What is the largest ocean on Earth by surface area?", "a": "Pacific Ocean", "keywords": ["pacific"]}
+{"id": 53, "domain": "Geography", "q": "What mountain is the highest peak in the world above sea level?", "a": "Mount Everest", "keywords": ["everest"]}
+{"id": 54, "domain": "Geography", "q": "On which continent is the Sahara Desert located?", "a": "Africa", "keywords": ["africa"]}
+{"id": 55, "domain": "Geography", "q": "What is the largest country in the world by land area?", "a": "Russia", "keywords": ["russia"]}
+{"id": 56, "domain": "Geography", "q": "What is the smallest independent state in the world by area?", "a": "Vatican City", "keywords": ["vatican"]}
+{"id": 57, "domain": "Geography", "q": "What river flows through the Grand Canyon?", "a": "Colorado River", "keywords": ["colorado"]}
+{"id": 58, "domain": "Geography", "q": "What is the capital of the United Kingdom?", "a": "London", "keywords": ["london"]}
+{"id": 59, "domain": "Geography", "q": "Which continent contains the South Pole?", "a": "Antarctica", "keywords": ["antarctica"]}
+{"id": 60, "domain": "Geography", "q": "What body of water separates the United Kingdom from mainland Europe?", "a": "English Channel", "keywords": ["english channel"]}
+{"id": 61, "domain": "Geography", "q": "What is the capital city of China?", "a": "Beijing", "keywords": ["beijing"]}
+{"id": 62, "domain": "Geography", "q": "What is the capital city of Russia?", "a": "Moscow", "keywords": ["moscow"]}
+{"id": 63, "domain": "Geography", "q": "What country has the largest population in the world?", "a": "India", "keywords": ["india"]}
+{"id": 64, "domain": "Geography", "q": "What is the capital city of South Korea?", "a": "Seoul", "keywords": ["seoul"]}
+{"id": 65, "domain": "Geography", "q": "Which mountain range separates Europe from Asia in Russia?", "a": "Ural Mountains", "keywords": ["ural", "urals"]}
+{"id": 66, "domain": "Geography", "q": "What is the capital city of Argentina?", "a": "Buenos Aires", "keywords": ["buenos aires"]}
+{"id": 67, "domain": "Geography", "q": "What is the deepest ocean trench on Earth?", "a": "Mariana Trench", "keywords": ["mariana"]}
+{"id": 68, "domain": "Geography", "q": "What desert covers much of northern Chile and is one of the driest places on Earth?", "a": "Atacama Desert", "keywords": ["atacama"]}
+{"id": 69, "domain": "Geography", "q": "What is the capital city of Mexico?", "a": "Mexico City", "keywords": ["mexico city"]}
+{"id": 70, "domain": "Geography", "q": "What is the capital city of Greece?", "a": "Athens", "keywords": ["athens"]}
+{"id": 71, "domain": "Geography", "q": "What large island is located off the southeast coast of mainland Africa?", "a": "Madagascar", "keywords": ["madagascar"]}
+{"id": 72, "domain": "Geography", "q": "What is the capital city of Turkey?", "a": "Ankara", "keywords": ["ankara"]}
+{"id": 73, "domain": "Geography", "q": "What river runs through Paris?", "a": "Seine", "keywords": ["seine"]}
+{"id": 74, "domain": "Geography", "q": "What is the capital city of Sweden?", "a": "Stockholm", "keywords": ["stockholm"]}
+{"id": 75, "domain": "Geography", "q": "Which country is shaped like a boot in Southern Europe?", "a": "Italy", "keywords": ["italy"]}
+{"id": 76, "domain": "History", "q": "In which year did World War II end?", "a": "1945", "keywords": ["1945"]}
+{"id": 77, "domain": "History", "q": "In which year did World War I begin?", "a": "1914", "keywords": ["1914"]}
+{"id": 78, "domain": "History", "q": "Who was the first president of the United States?", "a": "George Washington", "keywords": ["george washington", "washington"]}
+{"id": 79, "domain": "History", "q": "What ancient civilization built the Great Pyramids of Giza?", "a": "Ancient Egyptians", "keywords": ["egypt", "egyptians"]}
+{"id": 80, "domain": "History", "q": "Who wrote the play Romeo and Juliet?", "a": "William Shakespeare", "keywords": ["shakespeare"]}
+{"id": 81, "domain": "History", "q": "In what year did the Apollo 11 mission land humans on the Moon?", "a": "1969", "keywords": ["1969"]}
+{"id": 82, "domain": "History", "q": "Who was the first person to step on the Moon?", "a": "Neil Armstrong", "keywords": ["armstrong", "neil armstrong"]}
+{"id": 83, "domain": "History", "q": "What wall dividing East and West Berlin fell in 1989?", "a": "Berlin Wall", "keywords": ["berlin wall"]}
+{"id": 84, "domain": "History", "q": "Who invented the movable type printing press in Europe around 1440?", "a": "Johannes Gutenberg", "keywords": ["gutenberg"]}
+{"id": 85, "domain": "History", "q": "What famous ship sank in the North Atlantic in April 1912 after hitting an iceberg?", "a": "Titanic", "keywords": ["titanic"]}
+{"id": 86, "domain": "History", "q": "Who was the leader of the Indian independence movement known for nonviolent resistance?", "a": "Mahatma Gandhi", "keywords": ["gandhi", "mahatma gandhi"]}
+{"id": 87, "domain": "History", "q": "Who painted the Mona Lisa?", "a": "Leonardo da Vinci", "keywords": ["leonardo da vinci", "da vinci", "leonardo"]}
+{"id": 88, "domain": "History", "q": "In what century did the Black Death plague devastate Europe?", "a": "14th century", "keywords": ["14th", "fourteenth", "1300s"]}
+{"id": 89, "domain": "History", "q": "Who was the first female Prime Minister of the United Kingdom?", "a": "Margaret Thatcher", "keywords": ["margaret thatcher", "thatcher"]}
+{"id": 90, "domain": "History", "q": "Which empire was ruled by Julius Caesar?", "a": "Roman Empire", "keywords": ["rome", "roman"]}
+{"id": 91, "domain": "History", "q": "Who formulated the three laws of motion and universal gravitation?", "a": "Sir Isaac Newton", "keywords": ["newton", "isaac newton"]}
+{"id": 92, "domain": "History", "q": "In which city were the first modern Olympic Games held in 1896?", "a": "Athens", "keywords": ["athens"]}
+{"id": 93, "domain": "History", "q": "What ancient trade route connected China with the Mediterranean world?", "a": "Silk Road", "keywords": ["silk road"]}
+{"id": 94, "domain": "History", "q": "Who developed the theory of general relativity?", "a": "Albert Einstein", "keywords": ["einstein", "albert einstein"]}
+{"id": 95, "domain": "History", "q": "What declaration was adopted by the Continental Congress on July 4, 1776?", "a": "Declaration of Independence", "keywords": ["declaration of independence"]}
+{"id": 96, "domain": "History", "q": "Who delivered the famous 'I Have a Dream' speech in 1963?", "a": "Martin Luther King Jr.", "keywords": ["martin luther king", "mlk"]}
+{"id": 97, "domain": "History", "q": "Which South African leader spent 27 years in prison before becoming president?", "a": "Nelson Mandela", "keywords": ["mandela", "nelson mandela"]}
+{"id": 98, "domain": "History", "q": "What ancient wonder was located in Alexandria, Egypt and guided sailors?", "a": "Lighthouse of Alexandria", "keywords": ["lighthouse of alexandria", "pharos"]}
+{"id": 99, "domain": "History", "q": "Who was the queen of France during the French Revolution who was executed in 1793?", "a": "Marie Antoinette", "keywords": ["marie antoinette", "antoinette"]}
+{"id": 100, "domain": "History", "q": "What year did Christopher Columbus reach the Americas?", "a": "1492", "keywords": ["1492"]}
+{"id": 101, "domain": "History", "q": "What treaty signed in 1919 officially ended World War I?", "a": "Treaty of Versailles", "keywords": ["versailles"]}
+{"id": 102, "domain": "History", "q": "Who was the Greek philosopher who taught Plato?", "a": "Socrates", "keywords": ["socrates"]}
+{"id": 103, "domain": "History", "q": "Who was the Greek philosopher who was the student of Plato and tutor to Alexander the Great?", "a": "Aristotle", "keywords": ["aristotle"]}
+{"id": 104, "domain": "History", "q": "In what year did the Soviet Union dissolve?", "a": "1991", "keywords": ["1991"]}
+{"id": 105, "domain": "History", "q": "Which French heroine led troops at Orleans during the Hundred Years' War?", "a": "Joan of Arc", "keywords": ["joan of arc"]}
+{"id": 106, "domain": "History", "q": "What military fortress was stormed on July 14, 1789, sparking the French Revolution?", "a": "Bastille", "keywords": ["bastille"]}
+{"id": 107, "domain": "History", "q": "Who was the famous Macedonian king who conquered the Persian Empire?", "a": "Alexander the Great", "keywords": ["alexander the great", "alexander"]}
+{"id": 108, "domain": "History", "q": "What war was fought between the Northern and Southern United States from 1861 to 1865?", "a": "American Civil War", "keywords": ["civil war"]}
+{"id": 109, "domain": "History", "q": "Who discovered penicillin in 1928?", "a": "Alexander Fleming", "keywords": ["fleming", "alexander fleming"]}
+{"id": 110, "domain": "History", "q": "What international organization was founded in 1945 to promote peace after World War II?", "a": "United Nations", "keywords": ["united nations", "un"]}
+{"id": 111, "domain": "Physics", "q": "What is the speed of light in a vacuum approximately in kilometers per second?", "a": "300,000 km/s", "keywords": ["300,000", "300000", "299,792", "3x10^8"]}
+{"id": 112, "domain": "Physics", "q": "At what temperature Celsius does pure water freeze at standard pressure?", "a": "0 degrees", "keywords": ["0", "zero"]}
+{"id": 113, "domain": "Physics", "q": "At what temperature Celsius does pure water boil at sea level?", "a": "100 degrees", "keywords": ["100", "hundred"]}
+{"id": 114, "domain": "Physics", "q": "What unit is used to measure electrical resistance?", "a": "ohm", "keywords": ["ohm", "ohms"]}
+{"id": 115, "domain": "Physics", "q": "What unit is used to measure electrical current?", "a": "ampere", "keywords": ["ampere", "amp", "amps"]}
+{"id": 116, "domain": "Physics", "q": "What unit is used to measure electrical voltage or potential difference?", "a": "volt", "keywords": ["volt", "volts"]}
+{"id": 117, "domain": "Physics", "q": "What unit is used to measure frequency in the International System of Units?", "a": "hertz", "keywords": ["hertz", "hz"]}
+{"id": 118, "domain": "Physics", "q": "What law states that for every action there is an equal and opposite reaction?", "a": "Newton's Third Law", "keywords": ["third law", "newton's third"]}
+{"id": 119, "domain": "Physics", "q": "What is the standard unit of force in physics?", "a": "newton", "keywords": ["newton", "newtons"]}
+{"id": 120, "domain": "Physics", "q": "What is the standard unit of energy or work in physics?", "a": "joule", "keywords": ["joule", "joules"]}
+{"id": 121, "domain": "Physics", "q": "What is the primary method of heat transfer through a solid material?", "a": "conduction", "keywords": ["conduction"]}
+{"id": 122, "domain": "Physics", "q": "What form of heat transfer occurs through fluids via fluid movement?", "a": "convection", "keywords": ["convection"]}
+{"id": 123, "domain": "Physics", "q": "What form of heat transfer travels through space as electromagnetic waves?", "a": "radiation", "keywords": ["radiation"]}
+{"id": 124, "domain": "Chemistry", "q": "What is the lightest chemical element on the periodic table?", "a": "hydrogen", "keywords": ["hydrogen"]}
+{"id": 125, "domain": "Chemistry", "q": "What is the most abundant noble gas in Earth's atmosphere?", "a": "argon", "keywords": ["argon"]}
+{"id": 126, "domain": "Chemistry", "q": "What is the chemical formula for carbon monoxide?", "a": "CO", "keywords": ["co"]}
+{"id": 127, "domain": "Chemistry", "q": "What acid is found in citrus fruits like lemons and oranges?", "a": "citric acid", "keywords": ["citric"]}
+{"id": 128, "domain": "Chemistry", "q": "What acid gives vinegar its sour taste and smell?", "a": "acetic acid", "keywords": ["acetic"]}
+{"id": 129, "domain": "Chemistry", "q": "What is the atomic number of carbon?", "a": "6", "keywords": ["6", "six"]}
+{"id": 130, "domain": "Chemistry", "q": "What is the atomic number of oxygen?", "a": "8", "keywords": ["8", "eight"]}
+{"id": 131, "domain": "Physics", "q": "What type of energy does a moving object possess?", "a": "kinetic energy", "keywords": ["kinetic"]}
+{"id": 132, "domain": "Physics", "q": "What type of stored energy depends on an object's position in a gravity field?", "a": "potential energy", "keywords": ["potential"]}
+{"id": 133, "domain": "Physics", "q": "Can sound travel through a total vacuum?", "a": "No", "keywords": ["no", "cannot"]}
+{"id": 134, "domain": "Physics", "q": "Does light travel faster in air or in water?", "a": "Air", "keywords": ["air"]}
+{"id": 135, "domain": "Chemistry", "q": "What is the chemical symbol for silver?", "a": "Ag", "keywords": ["ag"]}
+{"id": 136, "domain": "Chemistry", "q": "What type of bond is formed when electrons are shared between two atoms?", "a": "covalent bond", "keywords": ["covalent"]}
+{"id": 137, "domain": "Chemistry", "q": "What type of bond forms through the electrostatic attraction between oppositely charged ions?", "a": "ionic bond", "keywords": ["ionic"]}
+{"id": 138, "domain": "Chemistry", "q": "What is the common chemical name for rust?", "a": "iron oxide", "keywords": ["iron oxide", "ferric oxide"]}
+{"id": 139, "domain": "Physics", "q": "What is the bending of light as it passes from one medium to another called?", "a": "refraction", "keywords": ["refraction"]}
+{"id": 140, "domain": "Physics", "q": "What is the resistance of an object to changes in its state of motion called?", "a": "inertia", "keywords": ["inertia"]}
+{"id": 141, "domain": "Math", "q": "How many degrees are in the interior angles of a triangle?", "a": "180 degrees", "keywords": ["180"]}
+{"id": 142, "domain": "Math", "q": "What is the only even prime number?", "a": "2", "keywords": ["2", "two"]}
+{"id": 143, "domain": "Math", "q": "What is the square root of 81?", "a": "9", "keywords": ["9", "nine"]}
+{"id": 144, "domain": "Math", "q": "What is the square root of 144?", "a": "12", "keywords": ["12", "twelve"]}
+{"id": 145, "domain": "Math", "q": "What is the perimeter of a square with a side length of 6 meters?", "a": "24 meters", "keywords": ["24"]}
+{"id": 146, "domain": "Math", "q": "What is the area of a rectangle with length 7 and width 5?", "a": "35", "keywords": ["35"]}
+{"id": 147, "domain": "Math", "q": "What is 15 multiplied by 4?", "a": "60", "keywords": ["60"]}
+{"id": 148, "domain": "Math", "q": "What is 100 divided by 4?", "a": "25", "keywords": ["25"]}
+{"id": 149, "domain": "Math", "q": "How many sides does a regular hexagon have?", "a": "6", "keywords": ["6", "six"]}
+{"id": 150, "domain": "Math", "q": "How many sides does a regular octagon have?", "a": "8", "keywords": ["8", "eight"]}
+{"id": 151, "domain": "Math", "q": "What is 2 raised to the power of 5?", "a": "32", "keywords": ["32"]}
+{"id": 152, "domain": "Math", "q": "What is 10 percent of 250?", "a": "25", "keywords": ["25"]}
+{"id": 153, "domain": "Math", "q": "What is 50 percent of 140?", "a": "70", "keywords": ["70"]}
+{"id": 154, "domain": "Math", "q": "What is the sum of angles in a rectangle?", "a": "360 degrees", "keywords": ["360"]}
+{"id": 155, "domain": "Math", "q": "Is 17 a prime number or a composite number?", "a": "prime", "keywords": ["prime"]}
+{"id": 156, "domain": "Math", "q": "Is 21 a prime number or a composite number?", "a": "composite", "keywords": ["composite"]}
+{"id": 157, "domain": "Math", "q": "What is 7 times 8?", "a": "56", "keywords": ["56"]}
+{"id": 158, "domain": "Math", "q": "What is 9 times 6?", "a": "54", "keywords": ["54"]}
+{"id": 159, "domain": "Math", "q": "What is the reciprocal of 1/4?", "a": "4", "keywords": ["4", "four"]}
+{"id": 160, "domain": "Math", "q": "What is the value of 5 factorial (5!)?", "a": "120", "keywords": ["120"]}
+{"id": 161, "domain": "Math", "q": "Solve for x: x + 8 = 20", "a": "12", "keywords": ["12"]}
+{"id": 162, "domain": "Math", "q": "Solve for y: 3 * y = 27", "a": "9", "keywords": ["9"]}
+{"id": 163, "domain": "Math", "q": "What is 50 + 75 - 25?", "a": "100", "keywords": ["100"]}
+{"id": 164, "domain": "Math", "q": "What is 11 squared?", "a": "121", "keywords": ["121"]}
+{"id": 165, "domain": "Math", "q": "What is 13 squared?", "a": "169", "keywords": ["169"]}
+{"id": 166, "domain": "Math", "q": "How many faces does a cube have?", "a": "6", "keywords": ["6", "six"]}
+{"id": 167, "domain": "Math", "q": "How many edges does a cube have?", "a": "12", "keywords": ["12", "twelve"]}
+{"id": 168, "domain": "Math", "q": "What is the next number in the sequence: 2, 4, 8, 16, ...?", "a": "32", "keywords": ["32"]}
+{"id": 169, "domain": "Math", "q": "What is 1/2 expressed as a decimal?", "a": "0.5", "keywords": ["0.5"]}
+{"id": 170, "domain": "Math", "q": "What is 3/4 expressed as a decimal?", "a": "0.75", "keywords": ["0.75"]}
+{"id": 171, "domain": "General", "q": "How many days are in a leap year?", "a": "366 days", "keywords": ["366"]}
+{"id": 172, "domain": "General", "q": "How many hours are in one complete day?", "a": "24 hours", "keywords": ["24"]}
+{"id": 173, "domain": "General", "q": "How many minutes are in two hours?", "a": "120 minutes", "keywords": ["120"]}
+{"id": 174, "domain": "General", "q": "What is the primary currency of Japan?", "a": "yen", "keywords": ["yen"]}
+{"id": 175, "domain": "General", "q": "What is the primary currency of the United Kingdom?", "a": "pound sterling", "keywords": ["pound", "sterling"]}
+{"id": 176, "domain": "General", "q": "What musical instrument has 88 keys on a standard keyboard?", "a": "piano", "keywords": ["piano"]}
+{"id": 177, "domain": "General", "q": "What is the national animal of India?", "a": "Bengal Tiger", "keywords": ["tiger", "bengal tiger"]}
+{"id": 178, "domain": "General", "q": "In chess, which piece can only move diagonally?", "a": "bishop", "keywords": ["bishop"]}
+{"id": 179, "domain": "General", "q": "In chess, which piece moves in an L-shape?", "a": "knight", "keywords": ["knight"]}
+{"id": 180, "domain": "General", "q": "How many colors are in a standard rainbow?", "a": "7", "keywords": ["7", "seven"]}
+{"id": 181, "domain": "General", "q": "What is the highest belt rank achievable in traditional Judo?", "a": "black belt", "keywords": ["black belt", "black"]}
+{"id": 182, "domain": "General", "q": "What sport uses a shuttlecock instead of a ball?", "a": "badminton", "keywords": ["badminton"]}
+{"id": 183, "domain": "General", "q": "How many players are on the court for one basketball team?", "a": "5", "keywords": ["5", "five"]}
+{"id": 184, "domain": "General", "q": "How many players are on the field for one soccer team?", "a": "11", "keywords": ["11", "eleven"]}
+{"id": 185, "domain": "General", "q": "What is the main language spoken in Brazil?", "a": "Portuguese", "keywords": ["portuguese"]}
+{"id": 186, "domain": "General", "q": "What is the main language spoken in Argentina?", "a": "Spanish", "keywords": ["spanish"]}
+{"id": 187, "domain": "General", "q": "What device is used to measure ambient temperature?", "a": "thermometer", "keywords": ["thermometer"]}
+{"id": 188, "domain": "General", "q": "What color do you get by mixing blue and yellow pigments?", "a": "green", "keywords": ["green"]}
+{"id": 189, "domain": "General", "q": "What color do you get by mixing red and blue pigments?", "a": "purple", "keywords": ["purple", "violet"]}
+{"id": 190, "domain": "General", "q": "Which direction does the Sun rise from on Earth?", "a": "east", "keywords": ["east"]}
+{"id": 191, "domain": "General", "q": "Which direction does the needle of a magnetic compass point?", "a": "north", "keywords": ["north"]}
+{"id": 192, "domain": "General", "q": "What is the capital city of Russia?", "a": "Moscow", "keywords": ["moscow"]}
+{"id": 193, "domain": "General", "q": "What is the name of the green pigment that absorbs light in leaves?", "a": "chlorophyll", "keywords": ["chlorophyll"]}
+{"id": 194, "domain": "General", "q": "How many centimeters are in one meter?", "a": "100", "keywords": ["100"]}
+{"id": 195, "domain": "General", "q": "How many grams are in one kilogram?", "a": "1000", "keywords": ["1000", "1,000"]}
+{"id": 196, "domain": "General", "q": "How many milliliters are in one liter?", "a": "1000", "keywords": ["1000", "1,000"]}
+{"id": 197, "domain": "General", "q": "What geometric shape has 3 sides and 3 angles?", "a": "triangle", "keywords": ["triangle"]}
+{"id": 198, "domain": "General", "q": "What is the currency of the United States?", "a": "US dollar", "keywords": ["dollar", "usd"]}
+{"id": 199, "domain": "General", "q": "How many seasons are there in a standard temperate year?", "a": "4", "keywords": ["4", "four"]}
+{"id": 200, "domain": "General", "q": "What is the common term for H2O in solid form?", "a": "ice", "keywords": ["ice"]}

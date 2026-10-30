@@ -28,6 +28,7 @@ class ModelConfig:
     sink_tokens: int = 4                  # Attention sink token count (Xiao et al., 2023)
     chunk_size: int = 512                 # Chunked prefill size for ultra-long context
     use_kv_cache: bool = True             # Fast O(1) inference with Key-Value Cache
+    n_predict_tokens: int = 1             # Multi-token prediction depth (k=1: standard next token; k=2,3: extra heads)
     arch_version: str = "2.2.0"
 
     def __post_init__(self):
@@ -118,6 +119,24 @@ class ModelConfig:
             sliding_window=4096,
             sink_tokens=4,
             chunk_size=512,
+            tie_weights=True,
+            arch_version="2.2.0",
+        )
+
+    @classmethod
+    def preset_25m(cls, vocab_size: int = 8000) -> "ModelConfig":
+        """25M parameter model configuration (8 layers, width 512, 8 heads, vocab 8000)."""
+        return cls(
+            vocab_size=vocab_size,
+            block_size=512,
+            max_seq_len=2048,
+            n_embd=512,
+            n_head=8,
+            n_kv_head=4,
+            n_layer=8,
+            norm_type="rmsnorm",
+            pos_emb="rope",
+            ffn_type="swiglu",
             tie_weights=True,
             arch_version="2.2.0",
         )

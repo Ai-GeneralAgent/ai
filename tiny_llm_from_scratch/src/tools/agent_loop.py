@@ -25,11 +25,13 @@ class BoundedAgentLoop:
         max_iterations: int = 5,
         max_tool_calls: int = 8,
         timeout_sec: float = 15.0,
+        allowed_tools: Optional[Any] = None,
     ):
         self.registry = registry
         self.max_iterations = max_iterations
         self.max_tool_calls = max_tool_calls
         self.timeout_sec = timeout_sec
+        self.allowed_tools = set(allowed_tools) if allowed_tools is not None else None
 
     def run_plan(self, task_goal: str, plan_steps: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Executes a structured task plan within bounds."""
@@ -59,6 +61,18 @@ class BoundedAgentLoop:
 
             if not tool_name:
                 steps_executed.append(AgentStep(step_num=i, thought=thought))
+                continue
+
+            # Check session allowlist
+            if self.allowed_tools is not None and tool_name not in self.allowed_tools:
+                step_rec = AgentStep(
+                    step_num=i,
+                    thought=thought,
+                    tool_name=tool_name,
+                    tool_args=tool_args,
+                    error=f"Security violation: tool '{tool_name}' blocked by session allowlist policy.",
+                )
+                steps_executed.append(step_rec)
                 continue
 
             # Cycle detection (same tool + same args repeated)

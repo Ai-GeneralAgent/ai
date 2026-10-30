@@ -7,14 +7,22 @@ Tests for Modern LLM v2.2 Upgrades:
 - Claude-Style Artifact Extraction & Rendering
 - Web Search Intent Classification in Reasoning Orchestrator
 """
+import os
+import sys
 import unittest
+from pathlib import Path
 import torch
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.models.config import ModelConfig
 from src.models.transformer import ModernTransformer, KVCache, precompute_rope_freqs
 from src.generation.sampler import TextGenerator, SamplingConfig
 from src.generation.artifacts import ClaudeArtifactEngine, ClaudeArtifact
 from src.tools.web_search import DuckDuckGoSearchEngine
+from src.tools.free_tools import ArxivSearchEngine, WikipediaEngine, WeatherEngine
 from src.reasoning.orchestrator import ReasoningOrchestrator
 
 
@@ -128,6 +136,45 @@ class TestModernV22Upgrades(unittest.TestCase):
         prep = orch.prepare_reasoning("/search quantum computing")
         self.assertEqual(prep.intent, "web-search")
         self.assertIn("Web Search Dispatch", prep.thinking)
+
+    def test_08_arxiv_search_engine(self):
+        papers = ArxivSearchEngine.search("transformer attention", max_results=2)
+        self.assertIsInstance(papers, list)
+        if papers:
+            self.assertIn("title", papers[0])
+            self.assertIn("authors", papers[0])
+            self.assertIn("summary", papers[0])
+            self.assertIn("url", papers[0])
+        formatted = ArxivSearchEngine.format_results("transformer attention", papers)
+        self.assertIn("ArXiv Research Papers", formatted)
+
+    def test_09_wikipedia_engine(self):
+        wiki = WikipediaEngine.summary("Artificial intelligence")
+        if wiki:
+            self.assertIn("title", wiki)
+            self.assertIn("extract", wiki)
+            self.assertIn("Wikipedia", wiki["source"])
+        formatted = WikipediaEngine.format_summary("Artificial intelligence", wiki)
+        self.assertIn("Wikipedia", formatted)
+
+    def test_10_open_meteo_weather_engine(self):
+        weather = WeatherEngine.get_weather("London")
+        if weather:
+            self.assertEqual(weather["city"], "London")
+            self.assertIn("temp_c", weather)
+            self.assertIn("condition", weather)
+        formatted = WeatherEngine.format_weather("London", weather)
+        self.assertIn("Weather", formatted)
+
+    def test_11_orchestrator_academic_and_tool_intents(self):
+        orch = ReasoningOrchestrator()
+        self.assertEqual(orch.classify_intent("/arxiv diffusion models"), "arxiv-search")
+        self.assertEqual(orch.classify_intent("/wiki Machine learning"), "wiki-lookup")
+        self.assertEqual(orch.classify_intent("/weather Tokyo"), "weather-lookup")
+
+        prep_arxiv = orch.prepare_reasoning("/arxiv diffusion models")
+        self.assertEqual(prep_arxiv.intent, "arxiv-search")
+        self.assertIn("ArXiv Research Dispatch", prep_arxiv.thinking)
 
 
 if __name__ == "__main__":

@@ -34,6 +34,8 @@ class TrainingConfig:
     device: str = "cpu"
     output_dir: str = "checkpoints"
     run_name: str = "modern_tiny_transformer"
+    optimizer: str = "adamw"          # "adamw" or "muon" (Muon for hidden 2D weights, AdamW for the rest)
+    muon_lr: float = 0.02
 
 
 class CosineWarmupScheduler:
@@ -68,7 +70,7 @@ class CosineWarmupScheduler:
             lr = self.min_lr + coeff * (self.max_lr - self.min_lr)
 
         for param_group in self.optimizer.param_groups:
-            param_group["lr"] = lr
+            param_group["lr"] = lr * param_group.get("lr_scale", 1.0)
         return lr
 
 
@@ -111,18 +113,29 @@ class Trainer:
                 self.val_start = split_idx
 
         # Optimizer: AdamW with weight decay on 2D parameters (weights) only
-        decay_params = [p for p in model.parameters() if p.requires_grad and p.dim() >= 2]
+        muon_ids = set()
+        muon_params = []
+        if train_config.optimizer == "muon":
+            muon_params = [p for p in model.blocks.parameters() if p.requires_grad and p.dim() == 2]
+            muon_ids = {id(p) for p in muon_params}
+        decay_params = [p for p in model.parameters() if p.requires_grad and p.dim() >= 2 and id(p) not in muon_ids]
         nodecay_params = [p for p in model.parameters() if p.requires_grad and p.dim() < 2]
         optim_groups = [
             {"params": decay_params, "weight_decay": train_config.weight_decay},
             {"params": nodecay_params, "weight_decay": 0.0},
         ]
-        self.optimizer = torch.optim.AdamW(
-            optim_groups,
-            lr=train_config.learning_rate,
-            betas=(0.9, 0.95),
-            eps=1e-8,
-        )
+        if train_config.optimizer == "muon":
+            from .muon import HybridMuonAdamW
+            self.optimizer = HybridMuonAdamW(
+                muon_params, optim_groups, lr=train_config.learning_rate, muon_lr=train_config.muon_lr
+            )
+        else:
+            self.optimizer = torch.optim.AdamW(
+                optim_groups,
+                lr=train_config.learning_rate,
+                betas=(0.9, 0.95),
+                eps=1e-8,
+            )
 
         self.scheduler = CosineWarmupScheduler(
             self.optimizer,
@@ -172,19 +185,28 @@ class Trainer:
     @torch.no_grad()
     def evaluate(self) -> float:
         self.model.eval()
-        total_loss = 0.0
-        batches = self.config.eval_batches
         block_size = self.model.config.block_size
-
-        for _ in range(batches):
-            x, y = self.val_cache.sample_batch(
-                self.val_start, self.val_end, self.config.batch_size, block_size, self.config.device
-            )
+        n_windows = max(1, self.config.eval_batches * self.config.batch_size)
+        max_start = self.val_end - (block_size + 1)
+        # Fixed, evenly spaced windows: every evaluation (and every run) scores the
+        # exact same text, so val_loss is comparable across steps and checkpoints.
+        starts = sorted({int(s) for s in torch.linspace(self.val_start, max(self.val_start, max_start), n_windows).tolist()})
+        total_loss, count = 0.0, 0
+        bs = self.config.batch_size
+        for i in range(0, len(starts), bs):
+            chunk = starts[i:i + bs]
+            xs, ys = [], []
+            for s in chunk:
+                w = self.val_cache.get_window(s, block_size + 1)
+                xs.append(w[:-1]); ys.append(w[1:])
+            x = torch.stack(xs).to(self.config.device)
+            y = torch.stack(ys).to(self.config.device)
             _, loss = self.model(x, y)
-            total_loss += loss.item()
+            total_loss += loss.item() * len(chunk)
+            count += len(chunk)
 
         self.model.train()
-        return total_loss / max(1, batches)
+        return total_loss / max(1, count)
 
     def train(self) -> TrainingMonitor:
         self.print_preflight()
@@ -213,11 +235,23 @@ class Trainer:
                 accum_loss = 0.0
                 skip_step = False
 
+                # Multi-token curriculum calculation (k=1 first third, k=2 second third, k=max final third)
+                curriculum_k = 1
+                mtp_depth = getattr(self.model.config, "n_predict_tokens", 1)
+                if mtp_depth > 1:
+                    progress = step / max(1, self.config.max_steps)
+                    if progress < 1.0 / 3.0:
+                        curriculum_k = 1
+                    elif progress < 2.0 / 3.0:
+                        curriculum_k = 2
+                    else:
+                        curriculum_k = mtp_depth
+
                 for _ in range(self.config.grad_accum_steps):
                     x, y = self.cache.sample_batch(
                         self.train_start, self.train_end, self.config.batch_size, block_size, self.config.device
                     )
-                    _, loss = self.model(x, y)
+                    _, loss = self.model(x, y, curriculum_k=curriculum_k)
                     loss_item = loss.item()
 
                     # Numerical instability / NaN guard (Problem #1 & #6)

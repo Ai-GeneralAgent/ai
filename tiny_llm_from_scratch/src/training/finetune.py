@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+import time
 from typing import Dict, List, Optional, Tuple, Union
 import torch
 import torch.nn as nn
@@ -159,13 +160,20 @@ def finetune_instructions(
     output_checkpoint: str = "checkpoints/modern_chat_finetuned.pt",
     replay_cache: Optional[CompactTokenCache] = None,
     replay_ratio: float = 0.20,
+    max_time: Optional[float] = None,
+    save_interval: int = 250,
+    optimizer_type: str = "adamw",
+    muon_lr: float = 0.01,
 ) -> ModernTransformer:
     """
     Industrial Supervised Fine-Tuning (SFT) Loop with:
     - Completion-only loss masking (-100 for prompt tokens)
     - Anti-catastrophic forgetting via replay buffer blending
+    - Muon / AdamW hybrid optimization option
     - Global gradient norm clipping (1.0)
     - Loss spike and NaN/Inf guards
+    - Wall-clock training duration limit (max_time in seconds)
+    - Periodic and best-loss checkpoint saving
     """
     model.train()
     dataset = InstructionDataset(
@@ -178,19 +186,52 @@ def finetune_instructions(
     if len(dataset) == 0:
         raise ValueError(f"No valid instruction pairs found in {dataset_path}")
 
-    # Decouple weight decay: 2D weights get decay, 1D layer norms & biases get 0.0
-    decay_params = [p for p in model.parameters() if p.requires_grad and p.dim() >= 2]
-    nodecay_params = [p for p in model.parameters() if p.requires_grad and p.dim() < 2]
-    optim_groups = [
-        {"params": decay_params, "weight_decay": 0.01},
-        {"params": nodecay_params, "weight_decay": 0.0},
-    ]
-    optimizer = torch.optim.AdamW(optim_groups, lr=lr, betas=(0.9, 0.95), eps=1e-8)
+    if optimizer_type == "muon":
+        from .muon import HybridMuonAdamW
+        muon_params = []
+        adam_params = []
+        for name, p in model.named_parameters():
+            if not p.requires_grad:
+                continue
+            if p.dim() >= 2 and "tok_embeddings" not in name and "output" not in name:
+                muon_params.append(p)
+            else:
+                adam_params.append(p)
 
-    print(f"Finetuning model on {len(dataset)} instruction pairs for {steps} steps (Replay ratio: {replay_ratio*100:.0f}%)...")
+        decay_adam = [p for p in adam_params if p.dim() >= 2]
+        nodecay_adam = [p for p in adam_params if p.dim() < 2]
+        adam_groups = [
+            {"params": decay_adam, "weight_decay": 0.01},
+            {"params": nodecay_adam, "weight_decay": 0.0},
+        ]
+        optimizer = HybridMuonAdamW(muon_params, adam_groups, lr=lr, muon_lr=muon_lr)
+        print(f"[OPTIMIZER] Hybrid Muon + AdamW active (Muon LR: {muon_lr}, AdamW LR: {lr}).")
+    else:
+        # Decouple weight decay: 2D weights get decay, 1D layer norms & biases get 0.0
+        decay_params = [p for p in model.parameters() if p.requires_grad and p.dim() >= 2]
+        nodecay_params = [p for p in model.parameters() if p.requires_grad and p.dim() < 2]
+        optim_groups = [
+            {"params": decay_params, "weight_decay": 0.01},
+            {"params": nodecay_params, "weight_decay": 0.0},
+        ]
+        optimizer = torch.optim.AdamW(optim_groups, lr=lr, betas=(0.9, 0.95), eps=1e-8)
+        print(f"[OPTIMIZER] Standard AdamW active (LR: {lr}).")
+
+    time_str = f", Max Duration: {max_time/3600:.1f} hours" if max_time else ""
+    print(f"Finetuning model on {len(dataset):,} instruction pairs for {steps:,} steps (Replay ratio: {replay_ratio*100:.0f}%{time_str})...")
 
     rolling_loss = None
+    best_loss = float("inf")
+    start_time = time.time()
+    last_step = 0
+
     for step in range(1, steps + 1):
+        elapsed = time.time() - start_time
+        if max_time and elapsed >= max_time:
+            print(f"\n[TIME LIMIT REACHED] Trained for {elapsed/3600:.2f} hours ({elapsed:.0f}s). Stopping gracefully at step {step-1}.")
+            last_step = step - 1
+            break
+
         x, y = dataset.sample_batch(batch_size, device=device)
         logits, _ = model(x)
         loss = F.cross_entropy(logits.view(-1, logits.size(-1)), y.view(-1), ignore_index=-100)
@@ -213,11 +254,32 @@ def finetune_instructions(
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         optimizer.step()
+        last_step = step
 
-        if step % 25 == 0 or step == steps:
-            print(f"Finetune Step {step:3d}/{steps} | Loss: {loss.item():.4f} (Rolling: {rolling_loss:.4f})")
+        # Periodic status logging
+        if step % 50 == 0 or step == steps:
+            cur_elapsed = time.time() - start_time
+            rate = step / max(1.0, cur_elapsed)
+            eta_str = ""
+            if max_time:
+                remaining_time = max(0.0, max_time - cur_elapsed)
+                eta_str = f" | Remaining: {remaining_time/60:.1f}m"
+            print(f"Finetune Step {step:5d}/{steps} | Loss: {loss.item():.4f} (Rolling: {rolling_loss:.4f}) | {rate:.2f} steps/s | Elapsed: {cur_elapsed/60:.1f}m{eta_str}", flush=True)
 
-    save_checkpoint(model, output_checkpoint, step=steps, val_loss=loss.item())
+        # Save checkpoint periodically
+        if step % save_interval == 0:
+            save_checkpoint(model, output_checkpoint, optimizer=optimizer, step=step, val_loss=rolling_loss)
+            is_new_best = False
+            if rolling_loss < best_loss:
+                best_loss = rolling_loss
+                best_ckpt = str(Path(output_checkpoint).with_name(Path(output_checkpoint).stem + "_best.pt"))
+                save_checkpoint(model, best_ckpt, optimizer=optimizer, step=step, val_loss=best_loss)
+                is_new_best = True
+            best_tag = " (NEW BEST!)" if is_new_best else ""
+            print(f"  [CHECKPOINT] Step {step} saved to {Path(output_checkpoint).name}{best_tag} | Loss: {rolling_loss:.4f}", flush=True)
+
+    final_loss = rolling_loss if rolling_loss is not None else 0.0
+    save_checkpoint(model, output_checkpoint, optimizer=optimizer, step=last_step, val_loss=final_loss)
     print(f"Finetuned checkpoint saved to {output_checkpoint}")
     return model
 

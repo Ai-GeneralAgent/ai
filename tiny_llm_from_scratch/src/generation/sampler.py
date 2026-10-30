@@ -65,6 +65,9 @@ class TextGenerator:
         logits = None
 
         if use_kv:
+            # Keep every position inside the range the model was trained on.
+            if idx.shape[1] > (block_size * 3) // 4:
+                idx = idx[:, -((block_size * 3) // 4):]
             # Prefill phase: evaluate initial prompt in memory-safe chunks (supports up to 1M context)
             prompt_len = idx.shape[1]
             chunk_size = getattr(getattr(self.model, "config", None), "chunk_size", 512) or 512
@@ -82,10 +85,17 @@ class TextGenerator:
                 logits, _ = self.model(idx_cond)
                 logits = logits[:, -1, :].clone()
             elif step > 0:
-                # O(1) step inference via KV cache
-                logits, _ = self.model(next_token, kv_caches=kv_caches, start_pos=current_pos)
+                if current_pos + 1 > block_size:
+                    # Context full: re-prefill the most recent half so RoPE positions
+                    # stay within what training covered (idx already holds next_token).
+                    ctx = idx[:, -(block_size // 2):]
+                    kv_caches = self.model.create_kv_caches()
+                    logits, _ = self.model(ctx, kv_caches=kv_caches, start_pos=0)
+                    current_pos = ctx.shape[1]
+                else:
+                    logits, _ = self.model(next_token, kv_caches=kv_caches, start_pos=current_pos)
+                    current_pos += 1
                 logits = logits[:, -1, :].clone()
-                current_pos += 1
 
             # Check for NaN / Inf
             if torch.isnan(logits).any() or torch.isinf(logits).any():

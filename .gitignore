@@ -15,12 +15,19 @@ __pycache__/
 *.db
 tmp_test_data/
 
-# Data files
+checkpoints/
+tiny_llm_from_scratch/checkpoints/
+
+# Data and large text files
+archive/
 books_txt/
 *data*.txt
 data.txt
-tiny_llm_from_scratch/*data*.txt
-tiny_llm_from_scratch/data_knowledge/
-tiny_llm_from_scratch/*.u16*
-tiny_llm_from_scratch/Mahabharata_Unabridged_English.txt
+**/*.txt
+**/*.u16*
+training_data/reasoning_sft/
+tiny_llm_from_scratch/data_curriculum/
+tiny_llm_from_scratch/training_data/curriculum_textbooks/
+tiny_llm_from_scratch/training_data/classic_literature/
+tiny_llm_from_scratch/training_data/reasoning_sft/
 

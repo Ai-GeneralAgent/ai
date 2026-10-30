@@ -40,12 +40,16 @@ from src.generation import TextGenerator, SamplingConfig
 def main():
     parser = argparse.ArgumentParser(description="Run SFT Instruction Tuning on Modern Tiny LLM")
     parser.add_argument("--base-checkpoint", default=None, help="Base model checkpoint to fine-tune from")
-    parser.add_argument("--data", default="instruction_examples.jsonl", help="Path to instruction JSONL dataset")
-    parser.add_argument("--replay-cache", default="data_knowledge_corpus.bpe_tokens.u16", help="Optional replay corpus cache")
+    parser.add_argument("--data", default="training_data/qa_and_database_sft.jsonl", help="Path to instruction JSONL dataset")
+    parser.add_argument("--replay-cache", default="data_master_v3_unified.bpe_tokens.u16", help="Optional replay corpus cache")
     parser.add_argument("--replay-ratio", type=float, default=0.20, help="Fraction of batch sampled from base replay")
-    parser.add_argument("--steps", type=int, default=100, help="Number of SFT steps")
+    parser.add_argument("--steps", type=int, default=10000, help="Number of SFT steps")
     parser.add_argument("--batch-size", type=int, default=4, help="Batch size")
     parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate")
+    parser.add_argument("--max-time", type=float, default=None, help="Maximum training time in seconds (e.g. 7200 for 2 hours)")
+    parser.add_argument("--save-interval", type=int, default=250, help="Checkpoint saving step interval")
+    parser.add_argument("--optimizer", choices=["adamw", "muon"], default="muon", help="Optimizer choice (default: muon)")
+    parser.add_argument("--muon-lr", type=float, default=0.01, help="Learning rate for Muon 2D orthogonal updates")
     parser.add_argument("--output", default="checkpoints/modern_chat_finetuned.pt", help="Output checkpoint file")
     parser.add_argument("--device", default="auto", help="Compute device: auto, cpu, cuda, or mps")
     args = parser.parse_args()
@@ -71,6 +75,8 @@ def main():
 
     if ckpt_path is None or not ckpt_path.is_file():
         candidates = [
+            PROJECT_ROOT / "checkpoints" / "modern_master_v3_best.pt",
+            PROJECT_ROOT / "checkpoints" / "modern_master_20min_best.pt",
             PROJECT_ROOT / "checkpoints" / "modern_production_v2_best.pt",
             PROJECT_ROOT / "checkpoints" / "modern_base_v2_best.pt",
             PROJECT_ROOT / "checkpoints" / "modern_knowledge_v2_best.pt",
@@ -119,6 +125,10 @@ def main():
         output_checkpoint=str(out_p),
         replay_cache=replay_cache,
         replay_ratio=args.replay_ratio if replay_cache else 0.0,
+        max_time=args.max_time,
+        save_interval=args.save_interval,
+        optimizer_type=args.optimizer,
+        muon_lr=args.muon_lr,
     )
     print(f"[SFT] Completed in {time.time() - t0:.2f}s. Saved to {out_p.name}")
 
@@ -128,8 +138,10 @@ def main():
     print("=" * 60)
     gen = TextGenerator(model, tokenizer)
     test_prompts = [
+        "What is a database?",
+        "What does ACID stand for in database transactions?",
+        "What is the difference between SQL and NoSQL databases?",
         "What is the difference between correlation and causation?",
-        "Why use version control?",
     ]
     s_cfg = SamplingConfig(temperature=0.7, top_k=40, top_p=0.9, max_new_tokens=80)
     for q in test_prompts:
