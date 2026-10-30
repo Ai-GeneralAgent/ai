@@ -165,12 +165,12 @@ class ModelConfig:
         )
 
     @classmethod
-    def preset_qwen_2b(cls, vocab_size: int = 151936) -> "ModelConfig":
-        """2B parameter scale matching Qwen 3.5 2B."""
+    def preset_foundation_2b(cls, vocab_size: int = 151936) -> "ModelConfig":
+        """2B parameter scale foundation architecture (1.37B params, 24 layers, width 2048, 2M context)."""
         return cls(
             vocab_size=vocab_size,
             block_size=1024,
-            max_seq_len=32768,
+            max_seq_len=2_097_152,
             n_embd=2048,
             n_head=16,
             n_kv_head=4,
@@ -178,10 +178,17 @@ class ModelConfig:
             norm_type="rmsnorm",
             pos_emb="rope",
             ffn_type="swiglu",
-            rope_theta=1000000.0,
+            rope_scaling_type="yarn",
+            rope_theta=2_000_000.0,
+            rope_scaling_factor=8192.0,
+            sliding_window=8192,
+            sink_tokens=4,
+            chunk_size=1024,
             tie_weights=True,
             arch_version="2.2.0",
         )
+
+    preset_qwen_2b = preset_foundation_2b
 
     @classmethod
     def preset_qwen_5_3b(cls, vocab_size: int = 151936) -> "ModelConfig":

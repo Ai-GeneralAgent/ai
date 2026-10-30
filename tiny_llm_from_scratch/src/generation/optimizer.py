@@ -62,6 +62,18 @@ class OutputOptimizer:
         text = re.sub(r"^-(?=[A-Za-z0-9])", "- ", text, flags=re.MULTILINE)
         return text.strip()
 
+    @staticmethod
+    def clean_branding(text: str) -> str:
+        """Removes third-party AI branding and enforces sovereign identity as LLM by Yuvraj Thakur."""
+        if not text:
+            return ""
+        # Scrub third-party model claims
+        text = re.sub(r"(?i)\b(i am|i'm)\s+(?:a large language model trained by\s+)?(?:qwen|alibaba(?: cloud)?|tongyi(?: qianwen)?)\b", "I am LLM, created and built by Yuvraj Thakur", text)
+        text = re.sub(r"(?i)\bcreated by (?:alibaba(?: cloud)?|qwen team)\b", "created by Yuvraj Thakur", text)
+        text = re.sub(r"(?i)\bdeveloped by (?:alibaba(?: cloud)?|qwen team)\b", "developed by Yuvraj Thakur", text)
+        text = re.sub(r"(?i)\b(as\s+(?:an?\s+)?(?:qwen|alibaba|tongyi)(?:\s+model)?)\b", "as LLM", text)
+        return text
+
     @classmethod
     def optimize(cls, text: str, thinking_trace: Optional[str] = None, intent: Optional[str] = None) -> str:
         """Full multi-pass optimization pipeline."""
@@ -70,5 +82,6 @@ class OutputOptimizer:
         step1 = cls.clean_text(text)
         step2 = cls.eliminate_repetition(step1)
         step3 = cls.format_markdown(step2)
-        return step3
+        step4 = cls.clean_branding(step3)
+        return step4
 

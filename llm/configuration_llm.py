@@ -95,8 +95,8 @@ class LLMConfig:
         )
 
     @classmethod
-    def preset_qwen_2b(cls, vocab_size: int = 151936) -> "LLMConfig":
-        """Exact architecture configuration matching 2B parameter scale."""
+    def preset_foundation_2b(cls, vocab_size: int = 151936) -> "LLMConfig":
+        """2B parameter scale foundation architecture (1.37B params, 24 layers, width 2048, 2M context)."""
         return cls(
             vocab_size=vocab_size,
             hidden_size=2048,
@@ -105,9 +105,12 @@ class LLMConfig:
             num_attention_heads=16,
             num_key_value_heads=4,
             head_dim=128,
-            max_position_embeddings=32768,
+            max_position_embeddings=2_097_152,
+            rope_theta=2_000_000.0,
             tie_word_embeddings=True,
         )
+
+    preset_qwen_2b = preset_foundation_2b
 
     @classmethod
     def preset_qwen_5_3b(cls, vocab_size: int = 151936) -> "LLMConfig":

@@ -1035,7 +1035,7 @@ def launch_cli():
                 o_cli = OllamaClient()
                 if o_cli.is_server_running():
                     installed_m = o_cli.list_installed_models()
-                    for cand in ["humanchat:latest", "qwen3.5:2b"]:
+                    for cand in ["llm:2b", "humanchat:latest", "qwen3.5:2b"]:
                         if cand in installed_m:
                             chosen_teacher = cand
                             use_teacher = True
