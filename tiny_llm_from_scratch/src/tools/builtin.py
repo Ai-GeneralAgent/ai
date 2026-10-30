@@ -633,3 +633,67 @@ def register_builtin_tools(registry: ToolRegistry, project_root: Path = Path("."
         parameters={"goal": "high-level mission goal to accomplish"},
         execute_fn=lambda goal: __import__("src.agents.autonomous_agent", fromlist=["AutonomousWorkAgent"]).AutonomousWorkAgent(registry, verbose=False).execute_mission(goal).to_dict(),
     ))
+
+    # --- GITHUB & GIT AUTOMATION TOOLS ---
+    registry.register(ToolDefinition(
+        name="github_search_repos",
+        description="Searches GitHub repositories by keyword, topic, or language using gh CLI and GitHub API.",
+        parameters={"query": "search query or topic", "limit": "optional maximum results (default 5)"},
+        execute_fn=lambda query, limit=5: __import__("src.tools.github_engine", fromlist=["GitHubEngine"]).GitHubEngine.search_repositories(query, int(limit)),
+    ))
+
+    registry.register(ToolDefinition(
+        name="github_get_repo",
+        description="Retrieves metadata, stars, forks, and default branch for a GitHub repository (e.g. 'owner/repo').",
+        parameters={"repo": "repository full name (owner/repo)"},
+        execute_fn=lambda repo: __import__("src.tools.github_engine", fromlist=["GitHubEngine"]).GitHubEngine.get_repo_info(repo),
+    ))
+
+    registry.register(ToolDefinition(
+        name="github_view_file",
+        description="Fetches raw source code or file contents from any public GitHub repository.",
+        parameters={"repo": "owner/repo", "file_path": "path to file in repo", "branch": "optional branch (default main)"},
+        execute_fn=lambda repo, file_path, branch=None: __import__("src.tools.github_engine", fromlist=["GitHubEngine"]).GitHubEngine.get_file_content(repo, file_path, branch),
+    ))
+
+    registry.register(ToolDefinition(
+        name="github_list_issues",
+        description="Lists open or closed issues from a GitHub repository.",
+        parameters={"repo": "owner/repo", "state": "open or closed (default open)", "limit": "optional maximum (default 5)"},
+        execute_fn=lambda repo, state="open", limit=5: __import__("src.tools.github_engine", fromlist=["GitHubEngine"]).GitHubEngine.list_issues(repo, state, int(limit)),
+    ))
+
+    registry.register(ToolDefinition(
+        name="github_list_prs",
+        description="Lists open or closed pull requests from a GitHub repository.",
+        parameters={"repo": "owner/repo", "state": "open or closed (default open)", "limit": "optional maximum (default 5)"},
+        execute_fn=lambda repo, state="open", limit=5: __import__("src.tools.github_engine", fromlist=["GitHubEngine"]).GitHubEngine.list_pull_requests(repo, state, int(limit)),
+    ))
+
+    registry.register(ToolDefinition(
+        name="git_local_status",
+        description="Returns local Git status (current branch, modified files, untracked files).",
+        parameters={},
+        execute_fn=lambda: __import__("src.tools.github_engine", fromlist=["GitHubEngine"]).GitHubEngine.git_status(project_root),
+    ))
+
+    registry.register(ToolDefinition(
+        name="git_local_diff",
+        description="Returns local uncommitted Git changes and diff summary.",
+        parameters={"max_lines": "optional maximum lines (default 100)"},
+        execute_fn=lambda max_lines=100: __import__("src.tools.github_engine", fromlist=["GitHubEngine"]).GitHubEngine.git_diff(project_root, int(max_lines)),
+    ))
+
+    registry.register(ToolDefinition(
+        name="git_local_log",
+        description="Returns recent Git commit history.",
+        parameters={"limit": "optional maximum commits (default 5)"},
+        execute_fn=lambda limit=5: __import__("src.tools.github_engine", fromlist=["GitHubEngine"]).GitHubEngine.git_log(project_root, int(limit)),
+    ))
+
+    registry.register(ToolDefinition(
+        name="git_local_commit",
+        description="Stages modified files and creates a Git commit locally.",
+        parameters={"message": "commit message"},
+        execute_fn=lambda message: __import__("src.tools.github_engine", fromlist=["GitHubEngine"]).GitHubEngine.git_commit(message, project_root),
+    ))

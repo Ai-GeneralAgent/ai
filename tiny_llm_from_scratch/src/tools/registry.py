@@ -36,6 +36,10 @@ class ToolRegistry:
     def get_tool(self, name: str) -> Optional[ToolDefinition]:
         return self.tools.get(name)
 
+    def get(self, name: str) -> Optional[ToolDefinition]:
+        """Convenience alias for get_tool."""
+        return self.get_tool(name)
+
     def list_tools(self) -> List[Dict[str, Any]]:
         return [
             {

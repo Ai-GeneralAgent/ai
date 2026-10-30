@@ -163,6 +163,70 @@ if prompt := st.chat_input("Ask a technical question, analyze code, or run a sec
             response_text = mission_res.synthesized_output
             provenance = "Autonomous Agent"
             st.markdown(response_text)
+        elif prompt.startswith("/gh"):
+            gh_args = prompt.split("/gh", 1)[1].strip().split()
+            sub = gh_args[0].lower() if gh_args else "search"
+            arg_tail = " ".join(gh_args[1:]).strip() if len(gh_args) > 1 else ""
+            from src.tools.github_engine import GitHubEngine
+            provenance = "GitHub Engine"
+            if sub == "search":
+                res = GitHubEngine.search_repositories(arg_tail, limit=5)
+                response_text = GitHubEngine.format_repos_display(res)
+            elif sub == "view":
+                res = GitHubEngine.get_repo_info(arg_tail)
+                if res.get("success"):
+                    d = res.get("data", {})
+                    response_text = f"### 📦 GitHub Repository: {res.get('repo')}\n\n- **Description**: {d.get('description')}\n- **Stars**: {d.get('stargazerCount', 0):,}\n- **Forks**: {d.get('forkCount', 0):,}\n- **Default Branch**: `{d.get('defaultBranch', 'main')}`\n- **URL**: {d.get('url')}"
+                else:
+                    response_text = f"GitHub Error: {res.get('error')}"
+            elif sub == "file":
+                parts = arg_tail.split()
+                if len(parts) < 2:
+                    response_text = "Usage: `/gh file <owner/repo> <file_path>`"
+                else:
+                    res = GitHubEngine.get_file_content(parts[0], parts[1])
+                    if res.get("success"):
+                        response_text = f"### 📄 File: `{parts[0]}/{parts[1]}` ({res.get('length'):,} bytes)\n```\n{res.get('content')[:3000]}\n```"
+                    else:
+                        response_text = f"GitHub Error: {res.get('error')}"
+            elif sub == "issues":
+                res = GitHubEngine.list_issues(arg_tail, limit=5)
+                if res.get("success"):
+                    lines = [f"### 📋 Issues: `{res.get('repo')}`"]
+                    for iss in res.get("issues", []):
+                        lines.append(f"- **#{iss.get('number')}**: [{iss.get('title')}]({iss.get('url')}) (`{iss.get('state')}`)")
+                    response_text = "\n".join(lines)
+                else:
+                    response_text = f"GitHub Error: {res.get('error')}"
+            else:
+                response_text = "Available `/gh` subcommands: `search <query>`, `view <owner/repo>`, `file <owner/repo> <path>`, `issues <owner/repo>`"
+            st.markdown(response_text)
+        elif prompt.startswith("/git"):
+            git_args = prompt.split("/git", 1)[1].strip().split()
+            sub = git_args[0].lower() if git_args else "status"
+            from src.tools.github_engine import GitHubEngine
+            provenance = "Git Engine"
+            if sub == "status":
+                res = GitHubEngine.git_status(PROJECT_ROOT)
+                if res.get("success"):
+                    response_text = f"### 🌿 Git Status: `{res.get('branch')}`\n\n- **Modified Files ({res.get('changed_files_count', 0)})**:\n" + "\n".join(f"  - `{f}`" for f in res.get("files", []))
+                else:
+                    response_text = f"Git Error: {res.get('error')}"
+            elif sub == "diff":
+                res = GitHubEngine.git_diff(PROJECT_ROOT, max_lines=60)
+                if res.get("success"):
+                    response_text = f"### 📝 Git Diff\n```diff\n{res.get('patch')}\n```"
+                else:
+                    response_text = f"Git Error: {res.get('error')}"
+            elif sub == "log":
+                res = GitHubEngine.git_log(PROJECT_ROOT, limit=5)
+                if res.get("success"):
+                    response_text = f"### 📜 Git Commit Log\n" + "\n".join(f"- `{c['commit']}`: {c['message']}" for c in res.get("commits", []))
+                else:
+                    response_text = f"Git Error: {res.get('error')}"
+            else:
+                response_text = "Available `/git` subcommands: `status`, `diff`, `log`"
+            st.markdown(response_text)
         elif prep.direct_answer:
             provenance = "Deterministic Tool"
             response_text = prep.direct_answer

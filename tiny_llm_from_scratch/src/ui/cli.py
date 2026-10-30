@@ -609,6 +609,92 @@ def launch_cli():
                 last_response = res.synthesized_output
             continue
 
+        elif lead == "/gh":
+            gh_args = user_input.split()[1:]
+            if not gh_args:
+                print(f"{C.RED}Usage: /gh search <query>  OR  /gh view <owner/repo>  OR  /gh file <owner/repo> <file>{C.RESET}")
+            else:
+                from ..tools.github_engine import GitHubEngine
+                sub = gh_args[0].lower()
+                arg_tail = " ".join(gh_args[1:]).strip()
+                if sub == "search":
+                    res = GitHubEngine.search_repositories(arg_tail, limit=5)
+                    card = GitHubEngine.format_repos_display(res)
+                    print(f"\n{card}\n")
+                    last_response = card
+                elif sub == "view":
+                    res = GitHubEngine.get_repo_info(arg_tail)
+                    if res.get("success"):
+                        d = res.get("data", {})
+                        print(f"\n{C.CYAN}=== GITHUB REPO: {res.get('repo')} ==={C.RESET}")
+                        print(f"  Description: {d.get('description')}")
+                        print(f"  Stars:       {d.get('stargazerCount', 0):,}")
+                        print(f"  Forks:       {d.get('forkCount', 0):,}")
+                        print(f"  Default:     {d.get('defaultBranch', 'main')}")
+                        print(f"  URL:         {d.get('url')}\n")
+                    else:
+                        print(f"{C.RED}Error: {res.get('error')}{C.RESET}")
+                elif sub == "file":
+                    file_parts = arg_tail.split()
+                    if len(file_parts) < 2:
+                        print(f"{C.RED}Usage: /gh file <owner/repo> <file_path>{C.RESET}")
+                    else:
+                        repo_name, fpath = file_parts[0], file_parts[1]
+                        res = GitHubEngine.get_file_content(repo_name, fpath)
+                        if res.get("success"):
+                            print(f"\n{C.CYAN}=== GITHUB FILE: {repo_name}/{fpath} ({res.get('length'):,} bytes) ==={C.RESET}\n")
+                            print(res.get("content")[:1500])
+                            if res.get("length", 0) > 1500:
+                                print(f"\n{C.GRAY}[... Truncated remainder of file ...]{C.RESET}\n")
+                        else:
+                            print(f"{C.RED}Error: {res.get('error')}{C.RESET}")
+                elif sub == "issues":
+                    res = GitHubEngine.list_issues(arg_tail, limit=5)
+                    if res.get("success"):
+                        print(f"\n{C.CYAN}=== ISSUES: {res.get('repo')} ==={C.RESET}")
+                        for iss in res.get("issues", []):
+                            print(f"  #{iss.get('number')}: {iss.get('title')} ({iss.get('state')})")
+                        print()
+                    else:
+                        print(f"{C.RED}Error: {res.get('error')}{C.RESET}")
+                else:
+                    print(f"{C.RED}Unknown GitHub subcommand '{sub}'. Available: search, view, file, issues{C.RESET}")
+            continue
+
+        elif lead == "/git":
+            git_args = user_input.split()[1:]
+            sub = git_args[0].lower() if git_args else "status"
+            from ..tools.github_engine import GitHubEngine
+            if sub == "status":
+                res = GitHubEngine.git_status(project_root)
+                if res.get("success"):
+                    print(f"\n{C.CYAN}=== LOCAL GIT STATUS ==={C.RESET}")
+                    print(f"  Branch:   {C.GREEN}{res.get('branch')}{C.RESET}")
+                    print(f"  Modified: {res.get('changed_files_count')} files changed")
+                    for f in res.get("files", []):
+                        print(f"    {f}")
+                    print()
+                else:
+                    print(f"{C.RED}Git error: {res.get('error')}{C.RESET}")
+            elif sub == "diff":
+                res = GitHubEngine.git_diff(project_root)
+                if res.get("success"):
+                    print(f"\n{C.CYAN}=== LOCAL GIT DIFF ==={C.RESET}\n{res.get('patch')}\n")
+                else:
+                    print(f"{C.RED}Git error: {res.get('error')}{C.RESET}")
+            elif sub == "log":
+                res = GitHubEngine.git_log(project_root, limit=5)
+                if res.get("success"):
+                    print(f"\n{C.CYAN}=== LOCAL GIT COMMIT LOG ==={C.RESET}")
+                    for c in res.get("commits", []):
+                        print(f"  {C.YELLOW}{c.get('commit')}{C.RESET} {c.get('message')}")
+                    print()
+                else:
+                    print(f"{C.RED}Git error: {res.get('error')}{C.RESET}")
+            else:
+                print(f"{C.RED}Unknown git subcommand '{sub}'. Options: status, diff, log{C.RESET}")
+            continue
+
         elif lead == "/artifacts":
             from ..generation.artifacts import ArtifactEngine
             arts = ArtifactEngine.extract_artifacts(last_response)
