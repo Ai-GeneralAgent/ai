@@ -55,11 +55,12 @@ class OllamaClient:
         self,
         prompt: str,
         model_name: str,
+        system: Optional[str] = None,
         temperature: float = 0.7,
         max_tokens: int = 256,
         timeout: float = 30.0,
     ) -> Dict[str, Any]:
-        """Queries local Ollama model with strict labeling and timeout."""
+        """Queries local Ollama model with strict labeling, optional system prompt, and timeout."""
         if not self.is_server_running():
             return {
                 "success": False,
@@ -72,11 +73,14 @@ class OllamaClient:
             "model": model_name,
             "prompt": prompt,
             "stream": False,
+            "think": False,
             "options": {
                 "temperature": temperature,
                 "num_predict": max_tokens,
             },
         }
+        if system:
+            payload["system"] = system
 
         try:
             data_bytes = json.dumps(payload).encode("utf-8")
@@ -111,6 +115,49 @@ class OllamaClient:
                 "error": str(e),
                 "source": "ollama_error",
             }
+
+    def generate_stream(
+        self,
+        prompt: str,
+        model_name: str,
+        system: Optional[str] = None,
+        temperature: float = 0.7,
+        max_tokens: int = 256,
+        timeout: float = 30.0,
+    ):
+        """Yields streaming tokens from Ollama model with think:False support."""
+        if not self.is_server_running():
+            return
+        payload = {
+            "model": model_name,
+            "prompt": prompt,
+            "stream": True,
+            "think": False,
+            "options": {
+                "temperature": temperature,
+                "num_predict": max_tokens,
+            },
+        }
+        if system:
+            payload["system"] = system
+
+        try:
+            data_bytes = json.dumps(payload).encode("utf-8")
+            req = urllib.request.Request(
+                f"{self.host}/api/generate",
+                data=data_bytes,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                for line in resp:
+                    if line:
+                        chunk = json.loads(line.decode("utf-8"))
+                        piece = chunk.get("response", "")
+                        if piece:
+                            yield piece
+        except Exception:
+            return
 
     def generate_synthetic_instruction(
         self,

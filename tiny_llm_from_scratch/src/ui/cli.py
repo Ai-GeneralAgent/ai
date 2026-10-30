@@ -35,6 +35,7 @@ from ..tools.builtin import register_builtin_tools, solve_math_problem
 from ..reasoning.orchestrator import ReasoningOrchestrator
 from ..rag.pipeline import LocalRAGPipeline
 from ..memory.conversation_db import ConversationDatabase
+from ..backends.ollama import OllamaClient
 
 
 # ANSI Color formatting
@@ -120,11 +121,49 @@ def load_model_safely(ckpt_path: Path, device: str):
         return None, f"Unrecognized format ({ckpt_format})"
 
 
-def print_banner(model_name: str, model_desc: str, device: str, rag_chunks: int, tool_count: int, active_mode: str = "assistant-chat"):
+def resolve_tokenizer_for_model(project_root: Path, model=None, requested_path: Optional[str] = None):
+    """
+    Dynamically resolves and loads the correct tokenizer matching the model's vocabulary size.
+    Prevents token index misalignments (which produce garbled decoding).
+    """
+    if requested_path:
+        p = project_root / requested_path
+        if p.is_file():
+            return Tokenizer.from_file(str(p)), p
+
+    vocab_size = getattr(getattr(model, "config", None), "vocab_size", None) if model else None
+    if vocab_size is not None and vocab_size <= 10000:
+        for cand in [project_root / "tokenizer_bpe.json", project_root / "tiny_llm_from_scratch" / "tokenizer_bpe.json"]:
+            if cand.is_file():
+                return Tokenizer.from_file(str(cand)), cand
+    else:
+        for cand in [project_root / "tokenizer_bpe_v2.json", project_root / "tiny_llm_from_scratch" / "tokenizer_bpe_v2.json"]:
+            if cand.is_file():
+                return Tokenizer.from_file(str(cand)), cand
+
+    for cand in [project_root / "tokenizer_bpe.json", project_root / "tiny_llm_from_scratch" / "tokenizer_bpe.json", project_root / "tokenizer_bpe_v2.json"]:
+        if cand.is_file():
+            return Tokenizer.from_file(str(cand)), cand
+    raise FileNotFoundError("No valid tokenizer JSON found in project root.")
+
+
+def print_banner(
+    model_name: str,
+    model_desc: str,
+    device: str,
+    rag_chunks: int,
+    tool_count: int,
+    active_mode: str = "assistant-chat",
+    tokenizer_name: str = "tokenizer_bpe.json",
+    vocab_size: int = 10000,
+    backend_mode: str = "auto",
+):
     print(f"\n{C.CYAN}{C.BOLD}{'=' * 68}")
     print("   NEURAL AI ASSISTANT (v2.2.0) - CONVERSATIONAL SYSTEM")
     print(f"{'=' * 68}{C.RESET}")
     print(f" {C.WHITE}Model:{C.RESET}         {C.GREEN}{model_name}{C.RESET} ({model_desc})")
+    print(f" {C.WHITE}Backend:{C.RESET}       {C.GREEN}{backend_mode.upper()}{C.RESET} (Intelligent Hybrid: Verified Tools + Fluid Generation)")
+    print(f" {C.WHITE}Tokenizer:{C.RESET}     {C.CYAN}{tokenizer_name}{C.RESET} ({vocab_size:,} vocab tokens matched)")
     print(f" {C.WHITE}Mode:{C.RESET}          {C.GREEN if active_mode == 'assistant-chat' else C.YELLOW}{active_mode.upper()}{C.RESET} | Toggle via {C.YELLOW}/mode [chat|completion]{C.RESET}")
     print(f" {C.WHITE}Hardware:{C.RESET}      {C.YELLOW}{device.upper()}{C.RESET} | {C.WHITE}Context Window:{C.RESET} {C.GREEN}1,048,576 (1M) Tokens Active{C.RESET}")
     print(f" {C.WHITE}Web Engine:{C.RESET}    {C.CYAN}DuckDuckGo Live Search & Knowledge Graphs Active{C.RESET}")
@@ -160,6 +199,7 @@ def print_help():
     print(f"  {C.YELLOW}/creative <prompt>{C.RESET}   Generate intuitive analogies & mental models")
     print(f"  {C.YELLOW}/model{C.RESET}               List available checkpoints in checkpoints/")
     print(f"  {C.YELLOW}/model <filename>{C.RESET}    Switch active checkpoint on the fly")
+    print(f"  {C.YELLOW}/backend [auto|scratch|ollama]{C.RESET} Toggle backend routing (auto: hybrid tools + neural generation)")
     print(f"  {C.YELLOW}/temp <float>{C.RESET}        Set temperature (default: 0.55)")
     print(f"  {C.YELLOW}/tokens <int>{C.RESET}        Set max generated tokens (default: 120)")
     print(f"  {C.YELLOW}/topp <float>{C.RESET}        Set nucleus top-p sampling (default: 0.90)")
@@ -182,15 +222,10 @@ def launch_cli():
     parser.add_argument("--rag", action="store_true", help="Start with RAG enabled")
     parser.add_argument("--think", action="store_true", default=True, help="Enable Chain-of-Thought thinking")
     parser.add_argument("--unrestricted", action="store_true", help="Bypass security & allowlists to test full capability")
+    parser.add_argument("--backend", default="auto", choices=["auto", "scratch", "ollama", "teacher"], help="Default generation backend")
     args = parser.parse_args()
 
     project_root = Path(__file__).resolve().parent.parent.parent
-    if args.tokenizer:
-        tok_path = project_root / args.tokenizer
-    elif (project_root / "tokenizer_bpe_v2.json").is_file():
-        tok_path = project_root / "tokenizer_bpe_v2.json"
-    else:
-        tok_path = project_root / "tokenizer_bpe.json"
     db_path = project_root / "memory.db"
 
     # Auto device resolution
@@ -204,11 +239,12 @@ def launch_cli():
     else:
         device = args.device
 
-    # Tokenizer
-    if not tok_path.is_file():
-        print(f"{C.RED}ERROR: Tokenizer not found at {tok_path}{C.RESET}")
-        return
-    tokenizer = Tokenizer.from_file(str(tok_path))
+    # Find and Load Checkpoint FIRST
+    active_ckpt_path = discover_best_checkpoint(project_root, args.checkpoint)
+    model, model_desc = load_model_safely(active_ckpt_path, device=device)
+
+    # Resolve Tokenizer dynamically to match model checkpoint vocab size
+    tokenizer, tok_path = resolve_tokenizer_for_model(project_root, model=model, requested_path=args.tokenizer)
 
     # Initialize Memory & Session
     memory = ConversationDatabase(db_path)
@@ -247,12 +283,9 @@ def launch_cli():
     if unrestricted_mode and hasattr(orchestrator, "agent_loop") and orchestrator.agent_loop:
         orchestrator.agent_loop.set_bypass_security(True)
 
-    # Find and Load Checkpoint
-    active_ckpt_path = discover_best_checkpoint(project_root, args.checkpoint)
-    model, model_desc = load_model_safely(active_ckpt_path, device=device)
-
     # Generation Config & Mode
     current_mode = "assistant-chat"  # Default mode: assistant-chat (alternative: text-completion)
+    active_backend = args.backend
     sampling_cfg = SamplingConfig(
         temperature=args.temperature,
         top_k=args.top_k,
@@ -274,6 +307,9 @@ def launch_cli():
         rag_chunks=len(rag.chunks),
         tool_count=len(tools.list_tools()),
         active_mode=current_mode,
+        tokenizer_name=tok_path.name if tok_path else "Unknown",
+        vocab_size=tokenizer.get_vocab_size() if tokenizer else 10000,
+        backend_mode=active_backend,
     )
 
     # Main Interactive REPL
@@ -469,6 +505,32 @@ def launch_cli():
             else:
                 print(f"{C.WHITE}Active Mode:{C.RESET} {C.GREEN if current_mode == 'assistant-chat' else C.YELLOW}{current_mode.upper()}{C.RESET}")
                 print(f"{C.GRAY}Switch modes using: /mode chat OR /mode completion{C.RESET}")
+            continue
+
+        elif lead == "/backend":
+            if len(cmd) > 1:
+                b_arg = cmd[1].lower().strip()
+                if b_arg in ["auto", "hybrid", "dual"]:
+                    active_backend = "auto"
+                    print(f"{C.GREEN}[Backend set to: AUTO (Hybrid Tools + Neural Generation)]{C.RESET}")
+                elif b_arg in ["scratch", "student", "transformer", "local"]:
+                    active_backend = "scratch"
+                    print(f"{C.YELLOW}[Backend set to: SCRATCH (Strictly From-Scratch Model)]{C.RESET}")
+                elif b_arg in ["ollama", "teacher", "qwen"]:
+                    active_backend = "ollama"
+                    print(f"{C.CYAN}[Backend set to: OLLAMA / TEACHER]{C.RESET}")
+                else:
+                    print(f"{C.RED}Unknown backend '{b_arg}'. Options: auto, scratch, ollama{C.RESET}")
+            else:
+                cli_check = OllamaClient()
+                is_on = cli_check.is_server_running()
+                models_found = cli_check.list_installed_models() if is_on else []
+                print(f"\n{C.CYAN}--- ACTIVE GENERATION BACKEND ---{C.RESET}")
+                print(f"  {C.WHITE}Mode:{C.RESET}              {active_backend.upper()}")
+                print(f"  {C.WHITE}Ollama Server:{C.RESET}     {C.GREEN if is_on else C.YELLOW}{'ONLINE (127.0.0.1:11434)' if is_on else 'OFFLINE'}{C.RESET}")
+                print(f"  {C.WHITE}Teacher Models:{C.RESET}    {', '.join(models_found) if models_found else 'None'}")
+                print(f"  {C.WHITE}Scratch Weights:{C.RESET}   {active_ckpt_path.name if active_ckpt_path else 'None'} ({model_desc})")
+                print(f"  {C.WHITE}Active Tokenizer:{C.RESET}  {tok_path.name} (vocab: {tokenizer.get_vocab_size():,})\n")
             continue
 
         elif lead in ["/security", "/guard", "/fullcap"]:
@@ -792,7 +854,8 @@ def launch_cli():
                         model = new_model
                         model_desc = new_desc
                         active_ckpt_path = target_path
-                        print(f"{C.GREEN}Switched to: {active_ckpt_path.name} ({model_desc}){C.RESET}")
+                        tokenizer, tok_path = resolve_tokenizer_for_model(project_root, model=model, requested_path=args.tokenizer)
+                        print(f"{C.GREEN}Switched to: {active_ckpt_path.name} ({model_desc}) | Tokenizer: {tok_path.name} ({tokenizer.get_vocab_size():,} vocab){C.RESET}")
                     else:
                         print(f"{C.RED}Failed to load checkpoint: {new_desc}{C.RESET}")
             else:
@@ -961,10 +1024,51 @@ def launch_cli():
             print(final_text)
             verifications = prep.verifications
         else:
-            if not generator:
-                final_text = "Model weights not loaded. Please select a valid checkpoint via /model."
-                print(final_text)
-            else:
+            use_teacher = False
+            chosen_teacher = None
+            if active_backend in ["auto", "ollama", "teacher"]:
+                o_cli = OllamaClient()
+                if o_cli.is_server_running():
+                    installed_m = o_cli.list_installed_models()
+                    for cand in ["humanchat:latest", "qwen3.5:2b"]:
+                        if cand in installed_m:
+                            chosen_teacher = cand
+                            use_teacher = True
+                            break
+
+            if use_teacher and chosen_teacher:
+                o_cli = OllamaClient()
+                pieces = []
+                system_t = (
+                    f"{system_persona} You are LLM, an AI assistant created and built by Yuvraj Thakur "
+                    f"(you are the AI assistant, not Yuvraj Thakur). Reply naturally, casually, and accurately like ChatGPT or Claude. "
+                    f"Never use corporate filler or boilerplate, and do not claim to be Qwen."
+                )
+                if stream_output:
+                    for piece in o_cli.generate_stream(
+                        prompt=user_input,
+                        model_name=chosen_teacher,
+                        system=system_t,
+                        temperature=sampling_cfg.temperature,
+                        max_tokens=sampling_cfg.max_new_tokens,
+                    ):
+                        sys.stdout.write(piece)
+                        sys.stdout.flush()
+                        pieces.append(piece)
+                    print()
+                    raw_text = "".join(pieces)
+                else:
+                    res_t = o_cli.generate(
+                        prompt=user_input,
+                        model_name=chosen_teacher,
+                        system=system_t,
+                        temperature=sampling_cfg.temperature,
+                        max_tokens=sampling_cfg.max_new_tokens,
+                    )
+                    raw_text = res_t.get("output", "")
+                    print(raw_text)
+                final_text = OutputOptimizer.optimize(raw_text, thinking_trace=prep.thinking, intent=prep.intent)
+            elif generator:
                 from ..generation.template import ChatTemplate, ChatMessage
                 chat_template = ChatTemplate()
                 formatted_prompt = chat_template.format([
@@ -986,6 +1090,9 @@ def launch_cli():
                     final_text = chat_template.extract_assistant_response(raw_text)
                     final_text = OutputOptimizer.optimize(final_text, thinking_trace=prep.thinking, intent=prep.intent)
                     print(final_text)
+            else:
+                final_text = "Model weights not loaded. Please select a valid checkpoint via /model."
+                print(final_text)
 
             from ..reasoning.verifier import ResponseVerifier
             verifications = [
@@ -1010,9 +1117,6 @@ def launch_cli():
             print(f"  {C.GRAY}{C.MAGENTA}[Citation] {cite}{C.RESET}")
 
         print(f"{C.GRAY}({elapsed:.2f}s){C.RESET}")
-
-        memory.add_message(session_id, "assistant", final_text)
-        last_response = final_text
 
 
 if __name__ == "__main__":

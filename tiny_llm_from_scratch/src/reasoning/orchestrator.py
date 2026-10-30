@@ -223,7 +223,8 @@ class ReasoningOrchestrator:
         # 7. Simple Factual Questions (Checked before broad ambiguity)
         if any(k in lower for k in [
             "what is python", "explain gravity", "what is a neural network",
-            "what is a transformer", "what is machine learning", "what is artificial intelligence"
+            "what is a transformer", "what is machine learning", "what is artificial intelligence",
+            "what is ai", "explain ai", "define ai"
         ]):
             return "factual"
 
@@ -264,11 +265,19 @@ class ReasoningOrchestrator:
         ]) or re.search(r"(\d+\s*[\+\-\*\/\^x]\s*\d+)", lower) or re.search(r"\bx\s*[\+\-\*=]", lower):
             return "mathematical"
 
+        # 11b. Sequence Counting
+        if any(k in lower for k in [
+            "say one to hundred", "count from 1 to 100", "count to 100",
+            "numbers from 1 to 100", "numbers 1 to 100", "1 to 100", "one to hundred"
+        ]):
+            return "sequence-counting"
+
         # 12. Coding & Programming
         if any(k in lower for k in [
             "```", "print(", "def ", "class ", "python", "write a python function",
             "function that", "algorithm", "javascript", "sql", "execute code",
-            "run this code", "write code", "code snippet"
+            "run this code", "write code", "code snippet",
+            "make a code", "code on", "hello world", "write a program", "write a script", "code for"
         ]):
             return "programming"
 
@@ -289,7 +298,8 @@ class ReasoningOrchestrator:
         # 15. Simple Factual Questions
         if any(k in lower for k in [
             "what is python", "explain gravity", "what is a neural network",
-            "what is a transformer", "what is machine learning", "what is artificial intelligence"
+            "what is a transformer", "what is machine learning", "what is artificial intelligence",
+            "what is ai", "define ai", "explain ai"
         ]):
             return "factual"
 
@@ -507,6 +517,13 @@ class ReasoningOrchestrator:
                 prep.direct_answer = (
                     "A Transformer is a deep learning architecture that relies on self-attention mechanisms "
                     "to process all tokens in a sequence concurrently, serving as the foundation for modern large language models."
+                )
+                return prep
+            if any(k in lower_prompt for k in ["what is ai", "artificial intelligence", "explain ai", "define ai"]):
+                prep.direct_answer = (
+                    "Artificial Intelligence (AI) is the field of computer science dedicated to building software and hardware systems "
+                    "capable of performing tasks that typically require human cognition, including reasoning, pattern recognition, learning from experience, "
+                    "problem solving, and natural language understanding."
                 )
                 return prep
             if "machine learning" in lower_prompt:
@@ -773,6 +790,19 @@ class ReasoningOrchestrator:
                     "details": f"Verified calculation: {math_res['result']}",
                 })
                 return prep
+
+        # 11b. Symbolic Sequence / Counting (e.g. "say one to hundred", "count from 1 to 100")
+        if intent == "sequence-counting" or any(k in lower_prompt for k in ["say one to hundred", "count from 1 to 100", "count to 100", "numbers from 1 to 100", "numbers 1 to 100", "1 to 100", "one to hundred"]):
+            thinking_steps.append("3. Sequence Generation: Generating sequential integers from 1 to 100.")
+            prep.thinking = "\n".join(thinking_steps)
+            seq = ", ".join(str(i) for i in range(1, 101))
+            prep.direct_answer = f"Here are the numbers from 1 to 100:\n\n{seq}"
+            prep.verifications.append({
+                "check": "Sequence Generation Verification",
+                "passed": True,
+                "details": "Generated 100 consecutive integer numbers",
+            })
+            return prep
 
         # 12. Programming / Coding Assistant
         if intent == "programming":
