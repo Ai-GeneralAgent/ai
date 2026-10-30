@@ -17,6 +17,18 @@ from .modeling_llm import (
 from .tokenizer import LLMTokenizer
 from .convert_weights import load_llm_checkpoint, adapt_state_dict
 
+# Unified alias with ModernTransformer
+try:
+    from src.models.transformer import ModernTransformer
+    from src.models.config import ModelConfig
+except ImportError:
+    try:
+        from tiny_llm_from_scratch.src.models.transformer import ModernTransformer
+        from tiny_llm_from_scratch.src.models.config import ModelConfig
+    except Exception:
+        ModernTransformer = LLMForCausalLM
+        ModelConfig = LLMConfig
+
 __all__ = [
     "LLMConfig",
     "LLMModel",
@@ -30,5 +42,7 @@ __all__ = [
     "LLMTokenizer",
     "load_llm_checkpoint",
     "adapt_state_dict",
+    "ModernTransformer",
+    "ModelConfig",
 ]
 

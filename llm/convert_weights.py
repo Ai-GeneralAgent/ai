@@ -7,7 +7,7 @@ Translates weights between:
 3. Standalone LLMForCausalLM model state dict
 """
 from pathlib import Path
-from typing import Dict, Union
+from typing import Any, Dict, Optional, Union
 
 import torch
 import sys
