@@ -12,6 +12,13 @@ from pathlib import Path
 import sys
 import time
 
+# Ensure UTF-8 stdout on Windows safely without crashing on subwords/emojis
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 import torch
 
 if __package__ is None or __package__ == "":
