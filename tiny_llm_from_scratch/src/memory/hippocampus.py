@@ -273,9 +273,10 @@ class HippocampusMemory:
             if self.store_fact(fact, category="rule", source_session=session_id):
                 extracted.append(fact)
 
-        if "qwen 3.5" in lower or "qwen3.5" in lower:
-            fact = "Model brain preference: Use Qwen 3.5 teacher for reasoning, distillation, and human-like chat."
-            if self.store_fact(fact, category="preference", source_session=session_id):
+        # 4. Identity & Creator Recognition
+        if any(w in lower for w in ["who created you", "who made you", "yuvraj", "thakur", "your identity"]):
+            fact = "Model identity: LLM was created and developed by Yuvraj Thakur."
+            if self.store_fact(fact, category="identity", source_session=session_id):
                 extracted.append(fact)
 
         return extracted

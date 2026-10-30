@@ -74,7 +74,9 @@ class InstructionDataset:
                     continue
 
     def _process_pair(self, instruction: str, response: str, system_prompt: str = ""):
-        prefix = f"<|im_start|>system\n{system_prompt}<|im_end|>\n" if system_prompt else ""
+        if not system_prompt:
+            system_prompt = "You are LLM, a helpful, friendly, and honest assistant built by Yuvraj Thakur."
+        prefix = f"<|im_start|>system\n{system_prompt}<|im_end|>\n"
         prompt_str = f"{prefix}### User:\n{instruction}\n\n### Assistant:\n"
         full_str = f"{prompt_str}{response}\n"
 

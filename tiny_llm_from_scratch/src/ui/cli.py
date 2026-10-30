@@ -251,7 +251,7 @@ def launch_cli():
     stream_output = True
     show_thinking = True
     rag_enabled = args.rag
-    system_persona = "You are a helpful, precise AI assistant."
+    system_persona = "You are LLM, a helpful, friendly, and honest assistant built by Yuvraj Thakur. Answer casually and concisely."
     last_response = ""
 
     # Show Banner

@@ -262,11 +262,16 @@ class ReasoningOrchestrator:
         if intent == "small-talk":
             thinking_steps.append("3. Conversational Router: Small talk / identity inquiry. Providing concise, helpful answer.")
             prep.thinking = "\n".join(thinking_steps)
-            if "how are you" in lower_prompt or "how's it going" in lower_prompt or "hows it going" in lower_prompt:
-                prep.direct_answer = "I'm doing well, thanks! ready to help you with anything you need."
-            elif any(k in lower_prompt for k in ["who are you", "who made you", "what model", "what are you"]):
+            if any(k in lower_prompt for k in ["qwen", "alibaba", "tongyi", "openai", "chatgpt", "claude"]):
                 prep.direct_answer = (
-                    "I am LLM, a personal AI assistant built by Yuvraj Thakur and running locally on your computer. "
+                    "No, I am not Qwen and I was not created by Alibaba, OpenAI, or any other corporation. "
+                    "I am LLM, an independent conversational model created and built by Yuvraj Thakur."
+                )
+            elif "how are you" in lower_prompt or "how's it going" in lower_prompt or "hows it going" in lower_prompt:
+                prep.direct_answer = "I'm doing well, thanks! ready to help you with anything you need."
+            elif any(k in lower_prompt for k in ["who are you", "who made you", "who created you", "what model", "what are you", "your creator", "your author"]):
+                prep.direct_answer = (
+                    "I am LLM, a personal conversational model built by Yuvraj Thakur and running locally on your computer. "
                     "I can answer questions, write and debug code, solve math with exact tools, remember key facts, "
                     "and search documents or the web."
                 )
